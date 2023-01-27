@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;netstandard2.1;net472;net481</TargetFrameworks>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Title>$(AssemblyName)</Title>
+    <Version>1.0.0</Version>
+    <Authors>Andreas Beham</Authors>
+    <Company>HEAL, FH Upper Austria</Company>
+    <Description>TableCollections adds IndexedTable classes which can be used as multi-key dictionaries. These can be sliced to obtain table representations with less keys. A slice is just a lower dimensional representation that fully supports manipulation. The actual values are kept in a single list, the keys map into this list via sets of indices.</Description>
+    <Copyright>Andreas Beham</Copyright>
+    <PackageProjectUrl>https://github.com/abeham/TableCollections</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/abeham/TableCollections</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>collections,dictionary,map</PackageTags>
+    <PackageReleaseNotes>1.0.0 is the initial release</PackageReleaseNotes>
+    <AssemblyVersion>1.0.0</AssemblyVersion>
+    <FileVersion>1.0.0</FileVersion>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
+    <IncludeSymbols>True</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+  <!-- Only enable nullable feature for the supported frameworks -->
+  <PropertyGroup Condition=" '$(TargetFramework)' != 'net472' And '$(TargetFramework)' != 'net481' ">
+	<Nullable>enable</Nullable>
+  </PropertyGroup>
+  
+  <ItemGroup>
+    <SourceRoot Include="$(MSBuildThisFileDirectory)"/>
+  </ItemGroup>
+
+  <ItemGroup>
+      <None Include="..\..\README.md" Pack="true" PackagePath="\"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>
