@@ -45,4 +45,22 @@ public class SliceTests
         Assert.Equal(9, table.Slice2("d").Sum());
         Assert.Equal(15, table.Slice2("e").Sum());
     }
+
+    [Fact]
+    public void TestManipulationAfterSlicing()
+    {
+        var table = new IndexedTable<string, string, int>();
+        table["a", "b"] = 1;
+        table["a", "c"] = 2;
+        table["a", "d"] = 3;
+        table["b", "b"] = 4;
+        table["b", "c"] = 5;
+        table["b", "d"] = 6;
+
+        var slice = table.Slice1("a");
+
+        table.Add("a", "e", 7);
+        Assert.True(slice.ContainsKey("e"));
+        Assert.Equal(7, slice["e"]);
+    }
 }

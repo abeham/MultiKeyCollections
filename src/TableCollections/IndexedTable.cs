@@ -27,6 +27,29 @@ namespace TableCollections
             _collapsedKeys = collapsedKeys;
         }
 
+        /// <summary>
+        /// Sets *all* values in the table (respectively the slice) to the given value
+        /// </summary>
+        /// <param name="value"></param>
+        public void Set(TValue value)
+        {
+            var collapsedIndices = GetCollapsedIndexsetOrDefault();
+            if (collapsedIndices == null)
+            {
+                // set all values
+                for (var i = 0; i < _data.Count; i++)
+                {
+                    _data[i] = value;
+                }
+            }
+            else
+            {
+                // set those values that are in the slice
+                foreach (var index in collapsedIndices)
+                    _data[index] = value;
+            }
+        }
+
         public bool Contains(params object[] keys)
         {
             ExceptionHandling.ThrowIfNull(keys, nameof(keys));
@@ -518,10 +541,10 @@ namespace TableCollections
                 if (!r5Iter.MoveNext()) throw new InvalidOperationException();
                 if (r5Iter.Current.Item2 != r1Iter.Current.Item2) throw new InvalidOperationException();
 #else
-            r2Iter.MoveNext();
-            r3Iter.MoveNext();
-            r4Iter.MoveNext();
-            r5Iter.MoveNext();
+                r2Iter.MoveNext();
+                r3Iter.MoveNext();
+                r4Iter.MoveNext();
+                r5Iter.MoveNext();
 #endif
                 yield return ((T1)r1Iter.Current.Item1, (T2)r2Iter.Current.Item1, (T3)r3Iter.Current.Item1, (T4)r4Iter.Current.Item1, (T5)r5Iter.Current.Item1, _data[r1Iter.Current.Item2]);
             }
