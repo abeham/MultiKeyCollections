@@ -122,6 +122,13 @@ namespace TableCollections
     }
 
     public class IndexedTable<T1, T2, T3, T4, T5, TValue> : IndexedTable<TValue>
+#if !(NET472 || NET481)
+        where T1 : notnull
+        where T2 : notnull
+        where T3 : notnull
+        where T4 : notnull
+        where T5 : notnull
+#endif
     {
         protected internal IndexedTable(IList<IDictionary<object, ISet<int>>> indices,
             IList<TValue> data, IList<ISet<int>> collapsedKeys) : base(indices, data, collapsedKeys) { }
@@ -554,6 +561,12 @@ namespace TableCollections
     }
 
     public class IndexedTable<T1, T2, T3, T4, TValue> : IndexedTable<TValue>
+#if !(NET472 || NET481)
+        where T1 : notnull
+        where T2 : notnull
+        where T3 : notnull
+        where T4 : notnull
+#endif
     {
         protected internal IndexedTable(IList<IDictionary<object, ISet<int>>> indices,
             IList<TValue> data, IList<ISet<int>> collapsedKeys) : base(indices, data, collapsedKeys) { }
@@ -920,9 +933,9 @@ namespace TableCollections
                 if (!r4Iter.MoveNext()) throw new InvalidOperationException();
                 if (r4Iter.Current.Item2 != r1Iter.Current.Item2) throw new InvalidOperationException();
 #else
-            r2Iter.MoveNext();
-            r3Iter.MoveNext();
-            r4Iter.MoveNext();
+                r2Iter.MoveNext();
+                r3Iter.MoveNext();
+                r4Iter.MoveNext();
 #endif
                 yield return ((T1)r1Iter.Current.Item1, (T2)r2Iter.Current.Item1, (T3)r3Iter.Current.Item1, (T4)r4Iter.Current.Item1, _data[r1Iter.Current.Item2]);
             }
@@ -930,6 +943,11 @@ namespace TableCollections
     }
 
     public class IndexedTable<T1, T2, T3, TValue> : IndexedTable<TValue>
+#if !(NET472 || NET481)
+        where T1 : notnull
+        where T2 : notnull
+        where T3 : notnull
+#endif
     {
 
         protected internal IndexedTable(IList<IDictionary<object, ISet<int>>> indices,
@@ -1242,8 +1260,8 @@ namespace TableCollections
                 if (!r3Iter.MoveNext()) throw new InvalidOperationException();
                 if (r3Iter.Current.Item2 != r1Iter.Current.Item2) throw new InvalidOperationException();
 #else
-            r2Iter.MoveNext();
-            r3Iter.MoveNext();
+                r2Iter.MoveNext();
+                r3Iter.MoveNext();
 #endif
                 yield return ((T1)r1Iter.Current.Item1, (T2)r2Iter.Current.Item1, (T3)r3Iter.Current.Item1, _data[r1Iter.Current.Item2]);
             }
@@ -1251,6 +1269,10 @@ namespace TableCollections
     }
 
     public class IndexedTable<T1, T2, TValue> : IndexedTable<TValue>
+#if !(NET472 || NET481)
+        where T1 : notnull
+        where T2 : notnull
+#endif
     {
 
         protected internal IndexedTable(IList<IDictionary<object, ISet<int>>> indices,
@@ -1516,8 +1538,10 @@ namespace TableCollections
     }
 
     public class IndexedTable<T1, TValue> : IndexedTable<TValue>
+#if !(NET472 || NET481)
+        where T1 : notnull
+#endif
     {
-
         protected internal IndexedTable(IList<IDictionary<object, ISet<int>>> indices,
             IList<TValue> data, IList<ISet<int>> collapsedKeys) : base(indices, data, collapsedKeys) { }
         public IndexedTable() : this(new KeyValuePair<T1, TValue>[0]) { }
@@ -1656,6 +1680,11 @@ namespace TableCollections
             {
                 yield return ((T1)r.Item1, _data[r.Item2]);
             }
+        }
+
+        public Dictionary<T1, TValue> ToDictionary()
+        {
+            return Enumerate(false).ToDictionary(x => x.Item1, x => x.Item2);
         }
     }
 }
