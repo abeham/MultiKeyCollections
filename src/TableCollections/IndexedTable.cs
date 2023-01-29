@@ -27,6 +27,8 @@ namespace TableCollections
             _collapsedKeys = collapsedKeys;
         }
 
+        public int Count => _data.Count;
+
         /// <summary>
         /// Sets *all* values in the table (respectively the slice) to the given value
         /// </summary>
