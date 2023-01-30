@@ -6,28 +6,52 @@ using System.Runtime.CompilerServices;
 
 namespace TableCollections
 {
+
+    public static class CompactingSettings
+    {
+        /// <summary>
+        /// Removals do not actually remove data from the table, but just delete the index.
+        /// If a lot of Remove operations are performed, the table will become very sparsely populated with actual data.
+        /// This setting controls the absolute number of unused indices that will trigger a compaction.
+        /// Both this and the relative threshold must be met for a compaction to occur.
+        /// </summary>
+        /// <value>The number of unused indices before a compaction is performed.</value>
+        public static int CompactingAbsoluteThreshold { get; set; } = 1000;
+        /// <summary>
+        /// Removals do not actually remove data from the table, but just delete the index.
+        /// If a lot of Remove operations are performed, the table will become very sparsely populated with actual data.
+        /// This setting controls the relative number of unused indices that will trigger a compaction.
+        /// Both this and the absolute threshold must be met for a compaction to occur.
+        /// </summary>
+        /// <value>The relative number of unused indices (relative to the full size of the array) before a compaction is performed.</value>
+        public static double CompactingRelativeThreshold { get; set; } = 0.5;
+    }
+
     public class IndexedTable<TValue> : IEnumerable<TValue>
     {
         protected IList<IDictionary<object, ISet<int>>> _indices;
         protected IList<TValue> _data;
         protected IList<ISet<int>> _collapsedKeys;
+        protected ISet<int>_unusedIndices;
 
         protected IndexedTable()
         {
             _indices = new List<IDictionary<object, ISet<int>>>();
             _data = new List<TValue>();
             _collapsedKeys = new List<ISet<int>>();
+            _unusedIndices = new HashSet<int>();
         }
 
         protected internal IndexedTable(IList<IDictionary<object, ISet<int>>> indices,
-            IList<TValue> data, IList<ISet<int>> collapsedKeys)
+            IList<TValue> data, IList<ISet<int>> collapsedKeys, ISet<int> unusedIndices)
         {
             _indices = indices;
             _data = data;
             _collapsedKeys = collapsedKeys;
+            _unusedIndices = unusedIndices;
         }
 
-        public int Count => GetCollapsedIndexsetOrDefault()?.Count ?? _data.Count;
+        public int Count => GetCollapsedIndexsetOrDefault()?.Count ?? (_data.Count - _unusedIndices.Count);
 
         /// <summary>
         /// Sets *all* values in the table (respectively the slice) to the given value
@@ -35,6 +59,7 @@ namespace TableCollections
         /// <param name="value"></param>
         public void Set(TValue value)
         {
+            // This method also overrides unused indices *shrug*
             var collapsedIndices = GetCollapsedIndexsetOrDefault();
             if (collapsedIndices == null)
             {
@@ -50,6 +75,101 @@ namespace TableCollections
                 foreach (var index in collapsedIndices)
                     _data[index] = value;
             }
+        }
+
+        public bool Remove(params object[] keys)
+        {
+            ExceptionHandling.ThrowIfNull(keys, nameof(keys));
+            if (keys.Length != _indices.Count)
+                throw new ArgumentException($"Expected {nameof(keys)} to have {_indices.Count} elements");
+
+            var indices = GetCollapsedIndexsetOrDefault();
+
+            for (var i = 0; i < keys.Length; i++)
+            {
+                if (!_indices[i].TryGetValue(keys[i], out var ind))
+                    return false;
+                if (indices == null)
+                {
+                    indices = new HashSet<int>(ind);
+                }
+                else
+                {
+                    indices.IntersectWith(ind);
+                }
+                if (indices.Count == 0) return false;
+            }
+
+            var index = indices.Single();
+            _data[index] = default; // don't remove, just set to default
+            _unusedIndices.Add(index);
+            for (var i = 0; i < _collapsedKeys.Count; i++)
+            {
+                _collapsedKeys[i].Remove(index); // we don't need to manipulate all indices > index, because we don't remove above
+            }
+            for (var i = 0; i < _indices.Count; i++)
+            {
+                foreach (var ind in _indices[i].Values)
+                {
+                    ind.Remove(index); // we don't need to manipulate all indices > index, because we don't remove above
+                }
+            }
+            CheckCompact();
+            return true;
+        }
+
+        protected void CheckCompact()
+        {
+            if (_unusedIndices.Count > CompactingSettings.CompactingAbsoluteThreshold
+                && _unusedIndices.Count > _data.Count * CompactingSettings.CompactingRelativeThreshold)
+                Compact();
+        }
+
+        private void Compact()
+        {
+            if (_unusedIndices.Count == 0) return;
+            var sequence = _unusedIndices.OrderByDescending(x => x).ToList();
+            var offsets = new Dictionary<int, int>();
+            var offset = 0;
+            var offsetIndex = 0;
+            for (var i = sequence.Count - 1; i >= 0; i--)
+            {
+                var index = sequence[i];
+                if (offset > 0)
+                {
+                    for (var o = offsetIndex; o < index; o++)
+                    {
+                        offsets[o] = offset;
+                    }
+                }
+                offsetIndex = index;
+                offset++;
+                _data.RemoveAt(sequence[sequence.Count - 1 - i]);
+            }
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.ExceptWith(_unusedIndices);
+                var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
+                {
+                    indices.ExceptWith(reindex.Select(x => x.index));
+                    indices.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            foreach (var dict in _indices)
+            {
+                foreach (var (key, indices) in dict)
+                {
+                    indices.ExceptWith(_unusedIndices);
+                    var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                    if (reindex.Count > 0)
+                    {
+                        indices.ExceptWith(reindex.Select(x => x.index));
+                        indices.UnionWith(reindex.Select(x => x.index - x.offset));
+                    }
+                }
+            }
+            _unusedIndices.Clear();
         }
 
         public bool Contains(params object[] keys)
@@ -131,7 +251,7 @@ namespace TableCollections
 #endif
     {
         protected internal IndexedTable(IList<IDictionary<object, ISet<int>>> indices,
-            IList<TValue> data, IList<ISet<int>> collapsedKeys) : base(indices, data, collapsedKeys) { }
+            IList<TValue> data, IList<ISet<int>> collapsedKeys, ISet<int> unusedIndices) : base(indices, data, collapsedKeys, unusedIndices) { }
         public IndexedTable() : this(new KeyValuePair<(T1, T2, T3, T4, T5), TValue>[0]) { }
         public IndexedTable(IEnumerable<KeyValuePair<(T1, T2, T3, T4, T5), TValue>> data)
         {
@@ -256,8 +376,19 @@ namespace TableCollections
                 }
                 if (index < 0)
                 {
-                    index = _data.Count;
-                    _data.Insert(index, value);
+                    if (_unusedIndices.Count > 0)
+                    {
+                        // reuse an unused index
+                        index = _unusedIndices.First();
+                        _unusedIndices.Remove(index);
+                        _data[index] = value;
+                    }
+                    else
+                    {
+                        // make an insert at the end
+                        index = _data.Count;
+                        _data.Insert(index, value);
+                    }
                     for (var i = 0; i < tuple.Length; i++)
                     {
                         _indices[i][tuple[i]].Add(index);
@@ -288,6 +419,121 @@ namespace TableCollections
         }
 
         public void Add((T1 key1, T2 key2, T3 key3, T4 key4, T5 key5) keys, TValue value) => Add(keys.key1, keys.key2, keys.key3, keys.key4, keys.key5, value);
+
+        public int Remove1(T1 key1)
+        {
+            if (!_indices[0].TryGetValue(key1, out var indices1)) return 0;
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.ExceptWith(indices1);
+            }
+            foreach (var dict in _indices)
+            {
+                foreach (var indices in dict.Values)
+                {
+                    if (indices == indices1)
+                        continue;
+                    indices.ExceptWith(indices1);
+                }
+            }
+            var removed = indices1.Count;
+            _unusedIndices.UnionWith(indices1);
+            indices1.Clear();
+            CheckCompact();
+            return removed;
+        }
+
+        public int Remove2(T2 key2)
+        {
+            if (!_indices[1].TryGetValue(key2, out var indices2)) return 0;
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.ExceptWith(indices2);
+            }
+            foreach (var dict in _indices)
+            {
+                foreach (var indices in dict.Values)
+                {
+                    if (indices == indices2)
+                        continue;
+                    indices.ExceptWith(indices2);
+                }
+            }
+            var removed = indices2.Count;
+            _unusedIndices.UnionWith(indices2);
+            indices2.Clear();
+            CheckCompact();
+            return removed;
+        }
+
+        public int Remove3(T3 key3)
+        {
+            if (!_indices[2].TryGetValue(key3, out var indices3)) return 0;
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.ExceptWith(indices3);
+            }
+            foreach (var dict in _indices)
+            {
+                foreach (var indices in dict.Values)
+                {
+                    if (indices == indices3)
+                        continue;
+                    indices.ExceptWith(indices3);
+                }
+            }
+            var removed = indices3.Count;
+            _unusedIndices.UnionWith(indices3);
+            indices3.Clear();
+            CheckCompact();
+            return removed;
+        }
+
+        public int Remove4(T4 key4)
+        {
+            if (!_indices[3].TryGetValue(key4, out var indices4)) return 0;
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.ExceptWith(indices4);
+            }
+            foreach (var dict in _indices)
+            {
+                foreach (var indices in dict.Values)
+                {
+                    if (indices == indices4)
+                        continue;
+                    indices.ExceptWith(indices4);
+                }
+            }
+            var removed = indices4.Count;
+            _unusedIndices.UnionWith(indices4);
+            indices4.Clear();
+            CheckCompact();
+            return removed;
+        }
+
+        public int Remove5(T5 key5)
+        {
+            if (!_indices[4].TryGetValue(key5, out var indices5)) return 0;
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.ExceptWith(indices5);
+            }
+            foreach (var dict in _indices)
+            {
+                foreach (var indices in dict.Values)
+                {
+                    if (indices == indices5)
+                        continue;
+                    indices.ExceptWith(indices5);
+                }
+            }
+            var removed = indices5.Count;
+            _unusedIndices.UnionWith(indices5);
+            indices5.Clear();
+            CheckCompact();
+            return removed;
+        }
 
         public bool TryGetValue(T1 key1, T2 key2, T3 key3, T4 key4, T5 key5, out TValue? value)
         {
@@ -324,7 +570,7 @@ namespace TableCollections
             }
             return new IndexedTable<T2, T3, T4, T5, TValue>(
                 new[] { _indices[1], _indices[2], _indices[3], _indices[4] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList());
+                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
         public IndexedTable<T1, T3, T4, T5, TValue> Slice2(T2 key2)
@@ -336,7 +582,7 @@ namespace TableCollections
             }
             return new IndexedTable<T1, T3, T4, T5, TValue>(
                 new[] { _indices[0], _indices[2], _indices[3], _indices[4] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList());
+                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
         public IndexedTable<T1, T2, T4, T5, TValue> Slice3(T3 key3)
@@ -348,7 +594,7 @@ namespace TableCollections
             }
             return new IndexedTable<T1, T2, T4, T5, TValue>(
                 new[] { _indices[0], _indices[1], _indices[3], _indices[4] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList());
+                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
         public IndexedTable<T1, T2, T3, T5, TValue> Slice4(T4 key4)
@@ -360,7 +606,7 @@ namespace TableCollections
             }
             return new IndexedTable<T1, T2, T3, T5, TValue>(
                 new[] { _indices[0], _indices[1], _indices[2], _indices[4] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList());
+                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
         public IndexedTable<T1, T2, T3, T4, TValue> Slice5(T5 key5)
@@ -372,7 +618,7 @@ namespace TableCollections
             }
             return new IndexedTable<T1, T2, T3, T4, TValue>(
                 new[] { _indices[0], _indices[1], _indices[2], _indices[3] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList());
+                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
         public bool ContainsKey1(T1 key1)
@@ -476,7 +722,7 @@ namespace TableCollections
             if (_indices[0].TryGetValue(key1, out var indices))
             {
                 values = new IndexedTable<T2, T3, T4, T5, TValue>(new[] { _indices[1], _indices[2], _indices[3], _indices[4] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList());
+                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
             values = new IndexedTable<T2, T3, T4, T5, TValue>();
@@ -489,7 +735,7 @@ namespace TableCollections
             if (_indices[1].TryGetValue(key2, out var indices))
             {
                 values = new IndexedTable<T1, T3, T4, T5, TValue>(new[] { _indices[0], _indices[2], _indices[3], _indices[4] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList());
+                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
             values = new IndexedTable<T1, T3, T4, T5, TValue>();
@@ -502,7 +748,7 @@ namespace TableCollections
             if (_indices[2].TryGetValue(key3, out var indices))
             {
                 values = new IndexedTable<T1, T2, T4, T5, TValue>(new[] { _indices[0], _indices[1], _indices[3], _indices[4] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList());
+                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
             values = new IndexedTable<T1, T2, T4, T5, TValue>();
@@ -515,7 +761,7 @@ namespace TableCollections
             if (_indices[3].TryGetValue(key4, out var indices))
             {
                 values = new IndexedTable<T1, T2, T3, T5, TValue>(new[] { _indices[0], _indices[1], _indices[2], _indices[4] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList());
+                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
             values = new IndexedTable<T1, T2, T3, T5, TValue>();
@@ -528,7 +774,7 @@ namespace TableCollections
             if (_indices[4].TryGetValue(key5, out var indices))
             {
                 values = new IndexedTable<T1, T2, T3, T4, TValue>(new[] { _indices[0], _indices[1], _indices[2], _indices[3] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList());
+                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
             values = new IndexedTable<T1, T2, T3, T4, TValue>();
@@ -589,7 +835,7 @@ namespace TableCollections
 #endif
     {
         protected internal IndexedTable(IList<IDictionary<object, ISet<int>>> indices,
-            IList<TValue> data, IList<ISet<int>> collapsedKeys) : base(indices, data, collapsedKeys) { }
+            IList<TValue> data, IList<ISet<int>> collapsedKeys, ISet<int> unusedIndices) : base(indices, data, collapsedKeys, unusedIndices) { }
         public IndexedTable() : this(new KeyValuePair<(T1, T2, T3, T4), TValue>[0]) { }
         public IndexedTable(IEnumerable<KeyValuePair<(T1, T2, T3, T4), TValue>> data)
         {
@@ -709,8 +955,19 @@ namespace TableCollections
                 }
                 if (index < 0)
                 {
-                    index = _data.Count;
-                    _data.Insert(index, value);
+                    if (_unusedIndices.Count > 0)
+                    {
+                        // reuse an unused index
+                        index = _unusedIndices.First();
+                        _unusedIndices.Remove(index);
+                        _data[index] = value;
+                    }
+                    else
+                    {
+                        // make an insert at the end
+                        index = _data.Count;
+                        _data.Insert(index, value);
+                    }
                     for (var i = 0; i < tuple.Length; i++)
                     {
                         _indices[i][tuple[i]].Add(index);
@@ -741,6 +998,98 @@ namespace TableCollections
         }
 
         public void Add((T1 key1, T2 key2, T3 key3, T4 key4) keys, TValue value) => Add(keys.key1, keys.key2, keys.key3, keys.key4, value);
+
+        public int Remove1(T1 key1)
+        {
+            if (!_indices[0].TryGetValue(key1, out var indices1)) return 0;
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.ExceptWith(indices1);
+            }
+            foreach (var dict in _indices)
+            {
+                foreach (var indices in dict.Values)
+                {
+                    if (indices == indices1)
+                        continue;
+                    indices.ExceptWith(indices1);
+                }
+            }
+            var removed = indices1.Count;
+            _unusedIndices.UnionWith(indices1);
+            indices1.Clear();
+            CheckCompact();
+            return removed;
+        }
+
+        public int Remove2(T2 key2)
+        {
+            if (!_indices[1].TryGetValue(key2, out var indices2)) return 0;
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.ExceptWith(indices2);
+            }
+            foreach (var dict in _indices)
+            {
+                foreach (var indices in dict.Values)
+                {
+                    if (indices == indices2)
+                        continue;
+                    indices.ExceptWith(indices2);
+                }
+            }
+            var removed = indices2.Count;
+            _unusedIndices.UnionWith(indices2);
+            indices2.Clear();
+            CheckCompact();
+            return removed;
+        }
+
+        public int Remove3(T3 key3)
+        {
+            if (!_indices[2].TryGetValue(key3, out var indices3)) return 0;
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.ExceptWith(indices3);
+            }
+            foreach (var dict in _indices)
+            {
+                foreach (var indices in dict.Values)
+                {
+                    if (indices == indices3)
+                        continue;
+                    indices.ExceptWith(indices3);
+                }
+            }
+            var removed = indices3.Count;
+            _unusedIndices.UnionWith(indices3);
+            indices3.Clear();
+            CheckCompact();
+            return removed;
+        }
+
+        public int Remove4(T4 key4)
+        {
+            if (!_indices[3].TryGetValue(key4, out var indices4)) return 0;
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.ExceptWith(indices4);
+            }
+            foreach (var dict in _indices)
+            {
+                foreach (var indices in dict.Values)
+                {
+                    if (indices == indices4)
+                        continue;
+                    indices.ExceptWith(indices4);
+                }
+            }
+            var removed = indices4.Count;
+            _unusedIndices.UnionWith(indices4);
+            indices4.Clear();
+            CheckCompact();
+            return removed;
+        }
 
         public bool TryGetValue(T1 key1, T2 key2, T3 key3, T4 key4, out TValue? value)
         {
@@ -774,7 +1123,7 @@ namespace TableCollections
             }
             return new IndexedTable<T2, T3, T4, TValue>(
                 new[] { _indices[1], _indices[2], _indices[3] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList());
+                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
         public IndexedTable<T1, T3, T4, TValue> Slice2(T2 key2)
@@ -786,7 +1135,7 @@ namespace TableCollections
             }
             return new IndexedTable<T1, T3, T4, TValue>(
                 new[] { _indices[0], _indices[2], _indices[3] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList());
+                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
         public IndexedTable<T1, T2, T4, TValue> Slice3(T3 key3)
@@ -798,7 +1147,7 @@ namespace TableCollections
             }
             return new IndexedTable<T1, T2, T4, TValue>(
                 new[] { _indices[0], _indices[1], _indices[3] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList());
+                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
         public IndexedTable<T1, T2, T3, TValue> Slice4(T4 key4)
@@ -810,7 +1159,7 @@ namespace TableCollections
             }
             return new IndexedTable<T1, T2, T3, TValue>(
                 new[] { _indices[0], _indices[1], _indices[2] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList());
+                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
         public bool ContainsKey1(T1 key1)
@@ -895,7 +1244,7 @@ namespace TableCollections
             if (_indices[0].TryGetValue(key1, out var indices))
             {
                 values = new IndexedTable<T2, T3, T4, TValue>(new[] { _indices[1], _indices[2], _indices[3] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList());
+                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
             values = new IndexedTable<T2, T3, T4, TValue>();
@@ -908,7 +1257,7 @@ namespace TableCollections
             if (_indices[1].TryGetValue(key2, out var indices))
             {
                 values = new IndexedTable<T1, T3, T4, TValue>(new[] { _indices[0], _indices[2], _indices[3] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList());
+                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
             values = new IndexedTable<T1, T3, T4, TValue>();
@@ -921,7 +1270,7 @@ namespace TableCollections
             if (_indices[2].TryGetValue(key3, out var indices))
             {
                 values = new IndexedTable<T1, T2, T4, TValue>(new[] { _indices[0], _indices[1], _indices[3] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList());
+                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
             values = new IndexedTable<T1, T2, T4, TValue>();
@@ -934,7 +1283,7 @@ namespace TableCollections
             if (_indices[3].TryGetValue(key4, out var indices))
             {
                 values = new IndexedTable<T1, T2, T3, TValue>(new[] { _indices[0], _indices[1], _indices[2] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList());
+                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
             values = new IndexedTable<T1, T2, T3, TValue>();
@@ -988,7 +1337,7 @@ namespace TableCollections
     {
 
         protected internal IndexedTable(IList<IDictionary<object, ISet<int>>> indices,
-            IList<TValue> data, IList<ISet<int>> collapsedKeys) : base(indices, data, collapsedKeys) { }
+            IList<TValue> data, IList<ISet<int>> collapsedKeys, ISet<int> unusedIndices) : base(indices, data, collapsedKeys, unusedIndices) { }
         public IndexedTable() : this(new KeyValuePair<(T1, T2, T3), TValue>[0]) { }
         public IndexedTable(IEnumerable<KeyValuePair<(T1, T2, T3), TValue>> data)
         {
@@ -1103,8 +1452,19 @@ namespace TableCollections
                 }
                 if (index < 0)
                 {
-                    index = _data.Count;
-                    _data.Insert(index, value);
+                    if (_unusedIndices.Count > 0)
+                    {
+                        // reuse an unused index
+                        index = _unusedIndices.First();
+                        _unusedIndices.Remove(index);
+                        _data[index] = value;
+                    }
+                    else
+                    {
+                        // make an insert at the end
+                        index = _data.Count;
+                        _data.Insert(index, value);
+                    }
                     for (var i = 0; i < tuple.Length; i++)
                     {
                         _indices[i][tuple[i]].Add(index);
@@ -1136,6 +1496,75 @@ namespace TableCollections
 
         public void Add((T1 key1, T2 key2, T3 key3) keys, TValue value) => Add(keys.key1, keys.key2, keys.key3, value);
 
+        public int Remove1(T1 key1)
+        {
+            if (!_indices[0].TryGetValue(key1, out var indices1)) return 0;
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.ExceptWith(indices1);
+            }
+            foreach (var dict in _indices)
+            {
+                foreach (var indices in dict.Values)
+                {
+                    if (indices == indices1)
+                        continue;
+                    indices.ExceptWith(indices1);
+                }
+            }
+            var removed = indices1.Count;
+            _unusedIndices.UnionWith(indices1);
+            indices1.Clear();
+            CheckCompact();
+            return removed;
+        }
+
+        public int Remove2(T2 key2)
+        {
+            if (!_indices[1].TryGetValue(key2, out var indices2)) return 0;
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.ExceptWith(indices2);
+            }
+            foreach (var dict in _indices)
+            {
+                foreach (var indices in dict.Values)
+                {
+                    if (indices == indices2)
+                        continue;
+                    indices.ExceptWith(indices2);
+                }
+            }
+            var removed = indices2.Count;
+            _unusedIndices.UnionWith(indices2);
+            indices2.Clear();
+            CheckCompact();
+            return removed;
+        }
+
+        public int Remove3(T3 key3)
+        {
+            if (!_indices[2].TryGetValue(key3, out var indices3)) return 0;
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.ExceptWith(indices3);
+            }
+            foreach (var dict in _indices)
+            {
+                foreach (var indices in dict.Values)
+                {
+                    if (indices == indices3)
+                        continue;
+                    indices.ExceptWith(indices3);
+                }
+            }
+            var removed = indices3.Count;
+            _unusedIndices.UnionWith(indices3);
+            indices3.Clear();
+            CheckCompact();
+            return removed;
+        }
+
         public bool TryGetValue(T1 key1, T2 key2, T3 key3, out TValue? value)
         {
             value = default;
@@ -1165,7 +1594,7 @@ namespace TableCollections
             }
             return new IndexedTable<T2, T3, TValue>(
                 new[] { _indices[1], _indices[2] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList());
+                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
         public IndexedTable<T1, T3, TValue> Slice2(T2 key2)
@@ -1177,7 +1606,7 @@ namespace TableCollections
             }
             return new IndexedTable<T1, T3, TValue>(
                 new[] { _indices[0], _indices[2] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList());
+                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
         public IndexedTable<T1, T2, TValue> Slice3(T3 key3)
@@ -1189,7 +1618,7 @@ namespace TableCollections
             }
             return new IndexedTable<T1, T2, TValue>(
                 new[] { _indices[0], _indices[1] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList());
+                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
         public bool ContainsKey1(T1 key1)
@@ -1255,7 +1684,7 @@ namespace TableCollections
             if (_indices[0].TryGetValue(key1, out var indices))
             {
                 values = new IndexedTable<T2, T3, TValue>(new[] { _indices[1], _indices[2] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList());
+                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
             values = new IndexedTable<T2, T3, TValue>();
@@ -1268,7 +1697,7 @@ namespace TableCollections
             if (_indices[1].TryGetValue(key2, out var indices))
             {
                 values = new IndexedTable<T1, T3, TValue>(new[] { _indices[0], _indices[2] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList());
+                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
             values = new IndexedTable<T1, T3, TValue>();
@@ -1281,7 +1710,7 @@ namespace TableCollections
             if (_indices[2].TryGetValue(key3, out var indices))
             {
                 values = new IndexedTable<T1, T2, TValue>(new[] { _indices[0], _indices[1] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList());
+                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
             values = new IndexedTable<T1, T2, TValue>();
@@ -1327,7 +1756,7 @@ namespace TableCollections
     {
 
         protected internal IndexedTable(IList<IDictionary<object, ISet<int>>> indices,
-            IList<TValue> data, IList<ISet<int>> collapsedKeys) : base(indices, data, collapsedKeys) { }
+            IList<TValue> data, IList<ISet<int>> collapsedKeys, ISet<int> unusedIndices) : base(indices, data, collapsedKeys, unusedIndices) { }
         public IndexedTable() : this(new KeyValuePair<(T1, T2), TValue>[0]) { }
         public IndexedTable(IEnumerable<KeyValuePair<(T1, T2), TValue>> data)
         {
@@ -1437,8 +1866,19 @@ namespace TableCollections
                 }
                 if (index < 0)
                 {
-                    index = _data.Count;
-                    _data.Insert(index, value);
+                    if (_unusedIndices.Count > 0)
+                    {
+                        // reuse an unused index
+                        index = _unusedIndices.First();
+                        _unusedIndices.Remove(index);
+                        _data[index] = value;
+                    }
+                    else
+                    {
+                        // make an insert at the end
+                        index = _data.Count;
+                        _data.Insert(index, value);
+                    }
                     for (var i = 0; i < tuple.Length; i++)
                     {
                         _indices[i][tuple[i]].Add(index);
@@ -1470,6 +1910,52 @@ namespace TableCollections
 
         public void Add((T1 key1, T2 key2) keys, TValue value) => Add(keys.key1, keys.key2, value);
 
+        public int Remove1(T1 key1)
+        {
+            if (!_indices[0].TryGetValue(key1, out var indices1)) return 0;
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.ExceptWith(indices1);
+            }
+            foreach (var dict in _indices)
+            {
+                foreach (var indices in dict.Values)
+                {
+                    if (indices == indices1)
+                        continue;
+                    indices.ExceptWith(indices1);
+                }
+            }
+            var removed = indices1.Count;
+            _unusedIndices.UnionWith(indices1);
+            indices1.Clear();
+            CheckCompact();
+            return removed;
+        }
+
+        public int Remove2(T2 key2)
+        {
+            if (!_indices[1].TryGetValue(key2, out var indices2)) return 0;
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.ExceptWith(indices2);
+            }
+            foreach (var dict in _indices)
+            {
+                foreach (var indices in dict.Values)
+                {
+                    if (indices == indices2)
+                        continue;
+                    indices.ExceptWith(indices2);
+                }
+            }
+            var removed = indices2.Count;
+            _unusedIndices.UnionWith(indices2);
+            indices2.Clear();
+            CheckCompact();
+            return removed;
+        }
+
         public bool TryGetValue(T1 key1, T2 key2, out TValue? value)
         {
             value = default;
@@ -1496,7 +1982,7 @@ namespace TableCollections
             }
             return new IndexedTable<T2, TValue>(
                 new[] { _indices[1] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList());
+                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
         public IndexedTable<T1, TValue> Slice2(T2 key2)
@@ -1508,7 +1994,7 @@ namespace TableCollections
             }
             return new IndexedTable<T1, TValue>(
                 new[] { _indices[0] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList());
+                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
         public bool ContainsKey1(T1 key1)
@@ -1555,7 +2041,7 @@ namespace TableCollections
             if (_indices[0].TryGetValue(key1, out var indices))
             {
                 values = new IndexedTable<T2, TValue>(new[] { _indices[1] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList());
+                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
             values = new IndexedTable<T2, TValue>();
@@ -1568,7 +2054,7 @@ namespace TableCollections
             if (_indices[1].TryGetValue(key2, out var indices))
             {
                 values = new IndexedTable<T1, TValue>(new[] { _indices[0] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList());
+                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
             values = new IndexedTable<T1, TValue>();
@@ -1605,7 +2091,7 @@ namespace TableCollections
 #endif
     {
         protected internal IndexedTable(IList<IDictionary<object, ISet<int>>> indices,
-            IList<TValue> data, IList<ISet<int>> collapsedKeys) : base(indices, data, collapsedKeys) { }
+            IList<TValue> data, IList<ISet<int>> collapsedKeys, ISet<int> unusedIndices) : base(indices, data, collapsedKeys, unusedIndices) { }
         public IndexedTable() : this(new KeyValuePair<T1, TValue>[0]) { }
         public IndexedTable(IEnumerable<KeyValuePair<T1, TValue>> data)
         {
@@ -1677,8 +2163,19 @@ namespace TableCollections
                 }
                 if (index < 0)
                 {
-                    index = _data.Count;
-                    _data.Insert(index, value);
+                    if (_unusedIndices.Count > 0)
+                    {
+                        // reuse an unused index
+                        index = _unusedIndices.First();
+                        _unusedIndices.Remove(index);
+                        _data[index] = value;
+                    }
+                    else
+                    {
+                        // make an insert at the end
+                        index = _data.Count;
+                        _data.Insert(index, value);
+                    }
                     _indices[0][key1].Add(index);
                     // the data needs to be added to all collapsed dimensions
                     foreach (var f in _collapsedKeys)
@@ -1697,6 +2194,20 @@ namespace TableCollections
         {
             if (ContainsKey(key1)) throw new ArgumentException($"Key already exists {key1}");
             this[key1] = value;
+        }
+
+        public int Remove(T1 key1)
+        {
+            if (!_indices[0].TryGetValue(key1, out var indices1)) return 0;
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.ExceptWith(indices1);
+            }
+            var removed = indices1.Count;
+            _unusedIndices.UnionWith(indices1);
+            indices1.Clear();
+            CheckCompact();
+            return removed;
         }
 
         public bool TryGetValue(T1 key1, out TValue? value)
