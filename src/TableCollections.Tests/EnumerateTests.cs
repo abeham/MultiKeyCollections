@@ -32,6 +32,13 @@ namespace TableCollections.Tests
             };
 
             Assert.Equal(expected5, table5.Enumerate());
+            var expectedSlice4 = new List<(string, string, string, string, int)>()
+            {
+                ("b1", "c1", "d1", "e1", 1),
+                ("b2", "c1", "d2", "e2", 2),
+                ("b3", "c2", "d1", "e3", 3),
+            };
+            Assert.Equal(expectedSlice4, table5.Slice1("a1").Enumerate());
 
             var table4 = new IndexedTable<string, string, string, string, int>();
             table4["a1", "b1", "c1", "d1"] = 1;
@@ -58,6 +65,13 @@ namespace TableCollections.Tests
             };
 
             Assert.Equal(expected4, table4.Enumerate());
+            var expectedSlice3 = new List<(string, string, string, int)>()
+            {
+                ("b1", "c1", "d1", 1),
+                ("b2", "c1", "d2", 2),
+                ("b3", "c2", "d1", 3),
+            };
+            Assert.Equal(expectedSlice3, table4.Slice1("a1").Enumerate());
 
             var table3 = new IndexedTable<string, string, string, int>();
             table3["a1", "b1", "c1"] = 1;
@@ -84,6 +98,13 @@ namespace TableCollections.Tests
             };
 
             Assert.Equal(expected3, table3.Enumerate());
+            var expectedSlice2 = new List<(string, string, int)>()
+            {
+                ("b1", "c1", 1),
+                ("b2", "c2", 2),
+                ("b3", "c3", 3),
+            };
+            Assert.Equal(expectedSlice2, table3.Slice1("a1").Enumerate());
 
             var table2 = new IndexedTable<string, string, int>();
             table2["a1", "b1"] = 1;
@@ -110,6 +131,13 @@ namespace TableCollections.Tests
             };
 
             Assert.Equal(expected2, table2.Enumerate());
+            var expectedSlice1 = new List<(string, int)>()
+            {
+                ("b1", 1),
+                ("b2", 2),
+                ("b3", 3),
+            };
+            Assert.Equal(expectedSlice1, table2.Slice1("a1").Enumerate());
 
             var table = new IndexedTable<string, int>();
             table["a"] = 1;

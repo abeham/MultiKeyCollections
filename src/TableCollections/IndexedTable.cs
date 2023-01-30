@@ -1732,18 +1732,6 @@ namespace TableCollections
             return true;
         }
 
-        public bool TryGetValues(T1 key1, out IList<TValue> values)
-        {
-            ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (_indices[0].TryGetValue(key1, out var indices))
-            {
-                values = indices.Select(i => _data[i]).ToList();
-                return true;
-            }
-            values = new TValue[0];
-            return false;
-        }
-
         public IEnumerable<(T1, TValue)> Enumerate(bool orderByIndex = true)
         {
             var collapsedIndices = GetCollapsedIndexsetOrDefault();
