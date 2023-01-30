@@ -8,10 +8,13 @@ namespace TableCollections.Tests
         public void TestReadmeCode()
         {
             var table = new IndexedTable<int, string, string, int>();
-            Assert.True(table.Add(1, "a", "x", 100));
-            Assert.True(table.Add(1, "a", "y", 200));
-            Assert.True(table.Add(1, "b", "x", 300));
-            Assert.True(table.Add(1, "b", "y", 400));
+            table.Add(1, "a", "x", 100);
+            Assert.True(table.Contains(1, "a", "x")); // true
+            table.Add(1, "a", "y", 200);
+            Assert.True(table.Contains(1, "a", "y")); // true
+            table.Add(1, "b", "x", 300);
+            Assert.True(table.Contains(1, "b", "x")); // true
+            table.Add(1, "b", "y", 400);
 
             table.Slice2("a").Add(2, "x", 500);
             Assert.True(table.Contains(2, "a", "x")); // true
@@ -36,7 +39,8 @@ namespace TableCollections.Tests
 
             // Slices contain a view of the data and also hold only a reference to the indices. Thus, adding to the
             // higher level representation, is also reflected in any slice:
-            Assert.True(table.Add(1, "c", "x", 700)); // the key (1, "c", "x") was not present when slice was created
+            table.Add(1, "c", "x", 700); // the key (1, "c", "x") was not present when slice was created
+            Assert.True(table.Contains(1, "c", "x")); // true
             Assert.True(slice.Contains("c", "x")); // true
             Assert.Equal(700, slice["c", "x"]); // 700
         }

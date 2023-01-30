@@ -19,6 +19,26 @@ public class SliceTests
         table5["a3", "b3", "c3", "d1", "e9"] = 9;
 
         Assert.Equal(9, table5.Count);
+        Assert.Equal(3, table5.Slice1("a1").Count);
+        Assert.Equal(3, table5.Slice1("a2").Count);
+        Assert.Equal(3, table5.Slice1("a3").Count);
+        Assert.Equal(3, table5.Slice2("b1").Count);
+        Assert.Equal(3, table5.Slice2("b2").Count);
+        Assert.Equal(3, table5.Slice2("b3").Count);
+        Assert.Equal(3, table5.Slice3("c1").Count);
+        Assert.Equal(3, table5.Slice3("c2").Count);
+        Assert.Equal(3, table5.Slice3("c3").Count);
+        Assert.Equal(5, table5.Slice4("d1").Count);
+        Assert.Equal(4, table5.Slice4("d2").Count);
+        Assert.Equal(1, table5.Slice5("e1").Count);
+        Assert.Equal(1, table5.Slice5("e2").Count);
+        Assert.Equal(1, table5.Slice5("e3").Count);
+        Assert.Equal(1, table5.Slice5("e4").Count);
+        Assert.Equal(1, table5.Slice5("e5").Count);
+        Assert.Equal(1, table5.Slice5("e6").Count);
+        Assert.Equal(1, table5.Slice5("e7").Count);
+        Assert.Equal(1, table5.Slice5("e8").Count);
+        Assert.Equal(1, table5.Slice5("e9").Count);        
         Assert.Equal(6, table5.Slice1("a1").Sum());
         Assert.Equal(24, table5.Slice1("a3").Sum());
         Assert.Equal(12, table5.Slice2("b1").Sum());
@@ -38,11 +58,22 @@ public class SliceTests
         table4["a3", "b3", "c3", "d1"] = 9;
 
         Assert.Equal(9, table4.Count);
+        Assert.Equal(3, table4.Slice1("a1").Count);
+        Assert.Equal(3, table4.Slice1("a2").Count);
+        Assert.Equal(3, table4.Slice1("a3").Count);
+        Assert.Equal(3, table4.Slice2("b1").Count);
+        Assert.Equal(3, table4.Slice2("b2").Count);
+        Assert.Equal(3, table4.Slice2("b3").Count);
+        Assert.Equal(3, table4.Slice3("c1").Count);
+        Assert.Equal(3, table4.Slice3("c2").Count);
+        Assert.Equal(3, table4.Slice3("c3").Count);
+        Assert.Equal(5, table4.Slice4("d1").Count);
+        Assert.Equal(4, table4.Slice4("d2").Count);
         Assert.Equal(6, table4.Slice1("a1").Sum());
         Assert.Equal(24, table4.Slice1("a3").Sum());
         Assert.Equal(12, table4.Slice2("b1").Sum());
         Assert.Equal(15, table4.Slice3("c2").Sum());
-        Assert.Equal(20, table5.Slice4("d2").Sum());
+        Assert.Equal(20, table4.Slice4("d2").Sum());
 
         var table3 = new IndexedTable<string, string, string, int>();
         table3["a1", "b1", "c1"] = 1;
@@ -56,6 +87,15 @@ public class SliceTests
         table3["a3", "b3", "c3"] = 9;
 
         Assert.Equal(9, table3.Count);
+        Assert.Equal(3, table3.Slice1("a1").Count);
+        Assert.Equal(3, table3.Slice1("a2").Count);
+        Assert.Equal(3, table3.Slice1("a3").Count);
+        Assert.Equal(3, table3.Slice2("b1").Count);
+        Assert.Equal(3, table3.Slice2("b2").Count);
+        Assert.Equal(3, table3.Slice2("b3").Count);
+        Assert.Equal(3, table3.Slice3("c1").Count);
+        Assert.Equal(3, table3.Slice3("c2").Count);
+        Assert.Equal(3, table3.Slice3("c3").Count);
         Assert.Equal(6, table3.Slice1("a1").Sum());
         Assert.Equal(24, table3.Slice1("a3").Sum());
         Assert.Equal(12, table3.Slice2("b1").Sum());
@@ -69,6 +109,12 @@ public class SliceTests
         table2["b", "c"] = 5;
         table2["b", "d"] = 6;        
 
+        Assert.Equal(6, table2.Count);
+        Assert.Equal(3, table2.Slice1("a").Count);
+        Assert.Equal(3, table2.Slice1("b").Count);
+        Assert.Equal(2, table2.Slice2("b").Count);
+        Assert.Equal(2, table2.Slice2("c").Count);
+        Assert.Equal(2, table2.Slice2("d").Count);
         Assert.Equal(6, table2.Slice1("a").Sum());
         Assert.Equal(15, table2.Slice1("b").Sum());
         Assert.Equal(5, table2.Slice2("b").Sum());

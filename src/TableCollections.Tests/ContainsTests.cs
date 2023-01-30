@@ -165,6 +165,7 @@ public class ContainsTests
         table5["a3", "b3", "c3", "d1", "e9"] = 9;
 
         var table4 = table5.Slice1("a1");
+        Assert.Equal(3, table4.Count);
         Assert.True(table4.Contains("b1", "c1", "d1", "e1"));
         Assert.True(table4.Contains("b2", "c1", "d2", "e2"));
         Assert.True(table4.Contains("b3", "c2", "d1", "e3"));
@@ -193,6 +194,7 @@ public class ContainsTests
         Assert.False(table4.ContainsKey4("e9"));
 
         var table3 = table4.Slice1("b1");
+        Assert.Equal(1, table3.Count);
         Assert.True(table3.Contains("c1", "d1", "e1"));
         Assert.False(table3.Contains("c1", "d2", "e2"));
         Assert.False(table3.Contains("c2", "d1", "e3"));
@@ -218,6 +220,7 @@ public class ContainsTests
         Assert.False(table3.ContainsKey3("e9"));
 
         var table2 = table3.Slice1("c1");
+        Assert.Equal(1, table2.Count);
         Assert.True(table2.Contains("d1", "e1"));
         Assert.False(table2.Contains("d2", "e2"));
         Assert.False(table2.Contains("d1", "e3"));
@@ -240,6 +243,7 @@ public class ContainsTests
         Assert.False(table2.ContainsKey2("e9"));
 
         var table1 = table2.Slice1("d1");
+        Assert.Equal(1, table1.Count);
         Assert.True(table1.Contains("e1"));
         Assert.False(table1.Contains("e2"));
         Assert.False(table1.Contains("e3"));
@@ -272,27 +276,36 @@ public class ContainsTests
         table5["a3", "b1", "c1", "d1", "e7"] = 7;
         table5["a3", "b2", "c2", "d2", "e8"] = 8;
         table5["a3", "b3", "c3", "d1", "e9"] = 9;
+        Assert.Equal(9, table5.Count);
 
         var table4 = table5.Slice1("a1");
+        Assert.Equal(3, table4.Count);
         table4["b4", "c4", "d4", "e10"] = 10;
+        Assert.Equal(4, table4.Count);
         Assert.True(table4.Contains("b4", "c4", "d4", "e10"));
         Assert.True(table5.Contains("a1", "b4", "c4", "d4", "e10"));
 
         var table3 = table4.Slice1("b1");
+        Assert.Equal(1, table3.Count);
         table3["c4", "d4", "e11"] = 11;
+        Assert.Equal(2, table3.Count);
         Assert.True(table3.Contains("c4", "d4", "e11"));
         Assert.True(table4.Contains("b1", "c4", "d4", "e11"));
         Assert.True(table5.Contains("a1", "b1", "c4", "d4", "e11"));
 
         var table2 = table3.Slice1("c1");
+        Assert.Equal(1, table2.Count);
         table2["d4", "e12"] = 12;
+        Assert.Equal(2, table2.Count);
         Assert.True(table2.Contains("d4", "e12"));
         Assert.True(table3.Contains("c1", "d4", "e12"));
         Assert.True(table4.Contains("b1", "c1", "d4", "e12"));
         Assert.True(table5.Contains("a1", "b1", "c1", "d4", "e12"));
 
         var table1 = table2.Slice1("d1");
+        Assert.Equal(1, table1.Count);
         table1["e13"] = 13;
+        Assert.Equal(2, table1.Count);
         Assert.True(table1.Contains("e13"));
         Assert.True(table2.Contains("d1", "e13"));
         Assert.True(table3.Contains("c1", "d1", "e13"));
