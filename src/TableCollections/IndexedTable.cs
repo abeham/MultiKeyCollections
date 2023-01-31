@@ -769,7 +769,11 @@ namespace TableCollections
             return true;
         }
 
+#if (NET472 || NET481 || NETSTANDARD2_1)
         public bool TrySlice1(T1 key1, out IndexedTable<T2, T3, T4, T5, TValue> values)
+#else
+        public bool TrySlice1(T1 key1, out IndexedTable<T2, T3, T4, T5, TValue>? values)
+#endif
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
             if (_indices[0].TryGetValue(key1, out var indices) && indices.Count > 0)
@@ -778,11 +782,15 @@ namespace TableCollections
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
-            values = new IndexedTable<T2, T3, T4, T5, TValue>();
+            values = default;
             return false;
         }
 
+#if (NET472 || NET481 || NETSTANDARD2_1)
         public bool TrySlice2(T2 key2, out IndexedTable<T1, T3, T4, T5, TValue> values)
+#else
+        public bool TrySlice2(T2 key2, out IndexedTable<T1, T3, T4, T5, TValue>? values)
+#endif
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
             if (_indices[1].TryGetValue(key2, out var indices) && indices.Count > 0)
@@ -791,11 +799,15 @@ namespace TableCollections
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
-            values = new IndexedTable<T1, T3, T4, T5, TValue>();
+            values = default;
             return false;
         }
 
+#if (NET472 || NET481 || NETSTANDARD2_1)
         public bool TrySlice3(T3 key3, out IndexedTable<T1, T2, T4, T5, TValue> values)
+#else
+        public bool TrySlice3(T3 key3, out IndexedTable<T1, T2, T4, T5, TValue>? values)
+#endif
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
             if (_indices[2].TryGetValue(key3, out var indices) && indices.Count > 0)
@@ -804,11 +816,15 @@ namespace TableCollections
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
-            values = new IndexedTable<T1, T2, T4, T5, TValue>();
+            values = default;
             return false;
         }
 
+#if (NET472 || NET481 || NETSTANDARD2_1)
         public bool TrySlice4(T4 key4, out IndexedTable<T1, T2, T3, T5, TValue> values)
+#else
+        public bool TrySlice4(T4 key4, out IndexedTable<T1, T2, T3, T5, TValue>? values)
+#endif
         {
             ExceptionHandling.ThrowIfNull(key4, nameof(key4));
             if (_indices[3].TryGetValue(key4, out var indices) && indices.Count > 0)
@@ -817,11 +833,15 @@ namespace TableCollections
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
-            values = new IndexedTable<T1, T2, T3, T5, TValue>();
+            values = default;
             return false;
         }
 
+#if (NET472 || NET481 || NETSTANDARD2_1)
         public bool TrySlice5(T5 key5, out IndexedTable<T1, T2, T3, T4, TValue> values)
+#else
+        public bool TrySlice5(T5 key5, out IndexedTable<T1, T2, T3, T4, TValue>? values)
+#endif
         {
             ExceptionHandling.ThrowIfNull(key5, nameof(key5));
             if (_indices[4].TryGetValue(key5, out var indices) && indices.Count > 0)
@@ -830,7 +850,7 @@ namespace TableCollections
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
-            values = new IndexedTable<T1, T2, T3, T4, TValue>();
+            values = default;
             return false;
         }
 
@@ -1299,7 +1319,11 @@ namespace TableCollections
             return true;
         }
 
+#if (NET472 || NET481 || NETSTANDARD2_1)
         public bool TrySlice1(T1 key1, out IndexedTable<T2, T3, T4, TValue> values)
+#else
+        public bool TrySlice1(T1 key1, out IndexedTable<T2, T3, T4, TValue>? values)
+#endif
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
             if (_indices[0].TryGetValue(key1, out var indices) && indices.Count > 0)
@@ -1308,11 +1332,15 @@ namespace TableCollections
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
-            values = new IndexedTable<T2, T3, T4, TValue>();
+            values = default;
             return false;
         }
 
+#if (NET472 || NET481 || NETSTANDARD2_1)
         public bool TrySlice2(T2 key2, out IndexedTable<T1, T3, T4, TValue> values)
+#else
+        public bool TrySlice2(T2 key2, out IndexedTable<T1, T3, T4, TValue>? values)
+#endif
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
             if (_indices[1].TryGetValue(key2, out var indices) && indices.Count > 0)
@@ -1321,11 +1349,15 @@ namespace TableCollections
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
-            values = new IndexedTable<T1, T3, T4, TValue>();
+            values = default;
             return false;
         }
 
+#if (NET472 || NET481 || NETSTANDARD2_1)
         public bool TrySlice3(T3 key3, out IndexedTable<T1, T2, T4, TValue> values)
+#else
+        public bool TrySlice3(T3 key3, out IndexedTable<T1, T2, T4, TValue>? values)
+#endif
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
             if (_indices[2].TryGetValue(key3, out var indices) && indices.Count > 0)
@@ -1334,11 +1366,15 @@ namespace TableCollections
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
-            values = new IndexedTable<T1, T2, T4, TValue>();
+            values = default;
             return false;
         }
 
+#if (NET472 || NET481 || NETSTANDARD2_1)
         public bool TrySlice4(T4 key4, out IndexedTable<T1, T2, T3, TValue> values)
+#else
+        public bool TrySlice4(T4 key4, out IndexedTable<T1, T2, T3, TValue>? values)
+#endif
         {
             ExceptionHandling.ThrowIfNull(key4, nameof(key4));
             if (_indices[3].TryGetValue(key4, out var indices) && indices.Count > 0)
@@ -1347,7 +1383,7 @@ namespace TableCollections
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
-            values = new IndexedTable<T1, T2, T3, TValue>();
+            values = default;
             return false;
         }
 
@@ -1746,7 +1782,11 @@ namespace TableCollections
             return true;
         }
 
+#if (NET472 || NET481 || NETSTANDARD2_1)
         public bool TrySlice1(T1 key1, out IndexedTable<T2, T3, TValue> values)
+#else
+        public bool TrySlice1(T1 key1, out IndexedTable<T2, T3, TValue>? values)
+#endif
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
             if (_indices[0].TryGetValue(key1, out var indices) && indices.Count > 0)
@@ -1755,11 +1795,15 @@ namespace TableCollections
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
-            values = new IndexedTable<T2, T3, TValue>();
+            values = default;
             return false;
         }
 
+#if (NET472 || NET481 || NETSTANDARD2_1)
         public bool TrySlice2(T2 key2, out IndexedTable<T1, T3, TValue> values)
+#else
+        public bool TrySlice2(T2 key2, out IndexedTable<T1, T3, TValue>? values)
+#endif
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
             if (_indices[1].TryGetValue(key2, out var indices) && indices.Count > 0)
@@ -1768,11 +1812,15 @@ namespace TableCollections
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
-            values = new IndexedTable<T1, T3, TValue>();
+            values = default;
             return false;
         }
 
+#if (NET472 || NET481 || NETSTANDARD2_1)
         public bool TrySlice3(T3 key3, out IndexedTable<T1, T2, TValue> values)
+#else
+        public bool TrySlice3(T3 key3, out IndexedTable<T1, T2, TValue>? values)
+#endif
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
             if (_indices[2].TryGetValue(key3, out var indices) && indices.Count > 0)
@@ -1781,7 +1829,7 @@ namespace TableCollections
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
-            values = new IndexedTable<T1, T2, TValue>();
+            values = default;
             return false;
         }
 
@@ -2109,7 +2157,11 @@ namespace TableCollections
             return true;
         }
 
+#if (NET472 || NET481 || NETSTANDARD2_1)
         public bool TrySlice1(T1 key1, out IndexedTable<T2, TValue> values)
+#else
+        public bool TrySlice1(T1 key1, out IndexedTable<T2, TValue>? values)
+#endif
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
             if (_indices[0].TryGetValue(key1, out var indices) && indices.Count > 0)
@@ -2118,11 +2170,15 @@ namespace TableCollections
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
-            values = new IndexedTable<T2, TValue>();
+            values = default;
             return false;
         }
 
+#if (NET472 || NET481 || NETSTANDARD2_1)
         public bool TrySlice2(T2 key2, out IndexedTable<T1, TValue> values)
+#else
+        public bool TrySlice2(T2 key2, out IndexedTable<T1, TValue>? values)
+#endif
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
             if (_indices[1].TryGetValue(key2, out var indices) && indices.Count > 0)
@@ -2131,7 +2187,7 @@ namespace TableCollections
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
-            values = new IndexedTable<T1, TValue>();
+            values = default;
             return false;
         }
 
