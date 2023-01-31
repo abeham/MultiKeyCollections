@@ -6,9 +6,12 @@ using System.Runtime.CompilerServices;
 
 namespace TableCollections
 {
-
-    public static class CompactingSettings
+    public class IndexedTable<TValue> : IEnumerable<TValue>
     {
+        protected IList<IDictionary<object, ISet<int>>> _indices;
+        protected IList<TValue> _data;
+        protected IList<ISet<int>> _collapsedKeys;
+        protected ISet<int>_unusedIndices;
         /// <summary>
         /// Removals do not actually remove data from the table, but just delete the index.
         /// If a lot of Remove operations are performed, the table will become very sparsely populated with actual data.
@@ -16,7 +19,7 @@ namespace TableCollections
         /// Both this and the relative threshold must be met for a compaction to occur.
         /// </summary>
         /// <value>The number of unused indices before a compaction is performed.</value>
-        public static int CompactingAbsoluteThreshold { get; set; } = 1000;
+        public int CompactingAbsoluteThreshold { get; set; } = 1000;
         /// <summary>
         /// Removals do not actually remove data from the table, but just delete the index.
         /// If a lot of Remove operations are performed, the table will become very sparsely populated with actual data.
@@ -24,15 +27,7 @@ namespace TableCollections
         /// Both this and the absolute threshold must be met for a compaction to occur.
         /// </summary>
         /// <value>The relative number of unused indices (relative to the full size of the array) before a compaction is performed.</value>
-        public static double CompactingRelativeThreshold { get; set; } = 0.5;
-    }
-
-    public class IndexedTable<TValue> : IEnumerable<TValue>
-    {
-        protected IList<IDictionary<object, ISet<int>>> _indices;
-        protected IList<TValue> _data;
-        protected IList<ISet<int>> _collapsedKeys;
-        protected ISet<int>_unusedIndices;
+        public double CompactingRelativeThreshold { get; set; } = 0.5;
 
         protected IndexedTable()
         {
@@ -87,7 +82,7 @@ namespace TableCollections
 
             for (var i = 0; i < keys.Length; i++)
             {
-                if (!_indices[i].TryGetValue(keys[i], out var ind))
+                if (!_indices[i].TryGetValue(keys[i], out var ind) || ind.Count == 0)
                     return false;
                 if (indices == null)
                 {
@@ -120,8 +115,8 @@ namespace TableCollections
 
         protected void CheckCompact()
         {
-            if (_unusedIndices.Count > CompactingSettings.CompactingAbsoluteThreshold
-                && _unusedIndices.Count > _data.Count * CompactingSettings.CompactingRelativeThreshold)
+            if (_unusedIndices.Count > CompactingAbsoluteThreshold
+                && _unusedIndices.Count > _data.Count * CompactingRelativeThreshold)
                 Compact();
         }
 
@@ -146,6 +141,10 @@ namespace TableCollections
                 offset++;
                 _data.RemoveAt(sequence[sequence.Count - 1 - i]);
             }
+            for (var o = offsetIndex; o < _data.Count + offset; o++)
+            {
+                offsets[o] = offset;
+            }
             foreach (var indices in _collapsedKeys)
             {
                 indices.ExceptWith(_unusedIndices);
@@ -158,8 +157,15 @@ namespace TableCollections
             }
             foreach (var dict in _indices)
             {
+#if NET472 || NET481
+                foreach (var kvp in dict)
+                {
+                    var key = kvp.Key;
+                    var indices = kvp.Value;
+#else
                 foreach (var (key, indices) in dict)
                 {
+#endif
                     indices.ExceptWith(_unusedIndices);
                     var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
                     if (reindex.Count > 0)
@@ -182,7 +188,7 @@ namespace TableCollections
 
             for (var i = 0; i < keys.Length; i++)
             {
-                if (!_indices[i].TryGetValue(keys[i], out var ind))
+                if (!_indices[i].TryGetValue(keys[i], out var ind) || ind.Count == 0)
                     return false;
                 if (indices == null)
                 {
@@ -305,15 +311,15 @@ namespace TableCollections
                 ExceptionHandling.ThrowIfNull(key3, nameof(key3));
                 ExceptionHandling.ThrowIfNull(key4, nameof(key4));
                 ExceptionHandling.ThrowIfNull(key5, nameof(key5));
-                if (!_indices[0].TryGetValue(key1, out var indices1))
+                if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
                     throw new ArgumentException($"Key not found {key1}");
-                if (!_indices[1].TryGetValue(key2, out var indices2))
+                if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
                     throw new ArgumentException($"Key not found {key2}");
-                if (!_indices[2].TryGetValue(key3, out var indices3))
+                if (!_indices[2].TryGetValue(key3, out var indices3) || indices3.Count == 0)
                     throw new ArgumentException($"Key not found {key3}");
-                if (!_indices[3].TryGetValue(key4, out var indices4))
+                if (!_indices[3].TryGetValue(key4, out var indices4) || indices4.Count == 0)
                     throw new ArgumentException($"Key not found {key4}");
-                if (!_indices[4].TryGetValue(key5, out var indices5))
+                if (!_indices[4].TryGetValue(key5, out var indices5) || indices5.Count == 0)
                     throw new ArgumentException($"Key not found {key5}");
                 var index = -1;
                 var indices = GetCollapsedIndexsetOrDefault();
@@ -422,7 +428,8 @@ namespace TableCollections
 
         public int Remove1(T1 key1)
         {
-            if (!_indices[0].TryGetValue(key1, out var indices1)) return 0;
+            if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
+                return 0;
             foreach (var indices in _collapsedKeys)
             {
                 indices.ExceptWith(indices1);
@@ -445,7 +452,8 @@ namespace TableCollections
 
         public int Remove2(T2 key2)
         {
-            if (!_indices[1].TryGetValue(key2, out var indices2)) return 0;
+            if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
+                return 0;
             foreach (var indices in _collapsedKeys)
             {
                 indices.ExceptWith(indices2);
@@ -468,7 +476,8 @@ namespace TableCollections
 
         public int Remove3(T3 key3)
         {
-            if (!_indices[2].TryGetValue(key3, out var indices3)) return 0;
+            if (!_indices[2].TryGetValue(key3, out var indices3) || indices3.Count == 0)
+                return 0;
             foreach (var indices in _collapsedKeys)
             {
                 indices.ExceptWith(indices3);
@@ -491,7 +500,8 @@ namespace TableCollections
 
         public int Remove4(T4 key4)
         {
-            if (!_indices[3].TryGetValue(key4, out var indices4)) return 0;
+            if (!_indices[3].TryGetValue(key4, out var indices4) || indices4.Count == 0)
+                return 0;
             foreach (var indices in _collapsedKeys)
             {
                 indices.ExceptWith(indices4);
@@ -514,7 +524,8 @@ namespace TableCollections
 
         public int Remove5(T5 key5)
         {
-            if (!_indices[4].TryGetValue(key5, out var indices5)) return 0;
+            if (!_indices[4].TryGetValue(key5, out var indices5) || indices5.Count == 0)
+                return 0;
             foreach (var indices in _collapsedKeys)
             {
                 indices.ExceptWith(indices5);
@@ -535,18 +546,22 @@ namespace TableCollections
             return removed;
         }
 
+#if NET472 || NET481 || NETSTANDARD2_1
+        public bool TryGetValue(T1 key1, T2 key2, T3 key3, T4 key4, T5 key5, out TValue value)
+#else
         public bool TryGetValue(T1 key1, T2 key2, T3 key3, T4 key4, T5 key5, out TValue? value)
+#endif
         {
             value = default;
-            if (!_indices[0].TryGetValue(key1, out var indices1))
+            if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
                 return false;
-            if (!_indices[1].TryGetValue(key2, out var indices2))
+            if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
                 return false;
-            if (!_indices[2].TryGetValue(key3, out var indices3))
+            if (!_indices[2].TryGetValue(key3, out var indices3) || indices3.Count == 0)
                 return false;
-            if (!_indices[3].TryGetValue(key4, out var indices4))
+            if (!_indices[3].TryGetValue(key4, out var indices4) || indices4.Count == 0)
                 return false;
-            if (!_indices[4].TryGetValue(key5, out var indices5))
+            if (!_indices[4].TryGetValue(key5, out var indices5) || indices5.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -564,7 +579,7 @@ namespace TableCollections
         public IndexedTable<T2, T3, T4, T5, TValue> Slice1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (!_indices[0].TryGetValue(key1, out var ind))
+            if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key1}");
             }
@@ -576,7 +591,7 @@ namespace TableCollections
         public IndexedTable<T1, T3, T4, T5, TValue> Slice2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (!_indices[1].TryGetValue(key2, out var ind))
+            if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key2}");
             }
@@ -588,7 +603,7 @@ namespace TableCollections
         public IndexedTable<T1, T2, T4, T5, TValue> Slice3(T3 key3)
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-            if (!_indices[2].TryGetValue(key3, out var ind))
+            if (!_indices[2].TryGetValue(key3, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key3}");
             }
@@ -600,7 +615,7 @@ namespace TableCollections
         public IndexedTable<T1, T2, T3, T5, TValue> Slice4(T4 key4)
         {
             ExceptionHandling.ThrowIfNull(key4, nameof(key4));
-            if (!_indices[3].TryGetValue(key4, out var ind))
+            if (!_indices[3].TryGetValue(key4, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key4}");
             }
@@ -612,7 +627,7 @@ namespace TableCollections
         public IndexedTable<T1, T2, T3, T4, TValue> Slice5(T5 key5)
         {
             ExceptionHandling.ThrowIfNull(key5, nameof(key5));
-            if (!_indices[4].TryGetValue(key5, out var ind))
+            if (!_indices[4].TryGetValue(key5, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key5}");
             }
@@ -624,7 +639,7 @@ namespace TableCollections
         public bool ContainsKey1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (!_indices[0].TryGetValue(key1, out var ind))
+            if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -643,7 +658,7 @@ namespace TableCollections
         public bool ContainsKey2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (!_indices[1].TryGetValue(key2, out var ind))
+            if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -662,7 +677,7 @@ namespace TableCollections
         public bool ContainsKey3(T3 key3)
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-            if (!_indices[2].TryGetValue(key3, out var ind))
+            if (!_indices[2].TryGetValue(key3, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -681,7 +696,7 @@ namespace TableCollections
         public bool ContainsKey4(T4 key4)
         {
             ExceptionHandling.ThrowIfNull(key4, nameof(key4));
-            if (!_indices[3].TryGetValue(key4, out var ind))
+            if (!_indices[3].TryGetValue(key4, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -700,7 +715,7 @@ namespace TableCollections
         public bool ContainsKey5(T5 key5)
         {
             ExceptionHandling.ThrowIfNull(key5, nameof(key5));
-            if (!_indices[4].TryGetValue(key5, out var ind))
+            if (!_indices[4].TryGetValue(key5, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -719,7 +734,7 @@ namespace TableCollections
         public bool TrySlice1(T1 key1, out IndexedTable<T2, T3, T4, T5, TValue> values)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (_indices[0].TryGetValue(key1, out var indices))
+            if (_indices[0].TryGetValue(key1, out var indices) && indices.Count > 0)
             {
                 values = new IndexedTable<T2, T3, T4, T5, TValue>(new[] { _indices[1], _indices[2], _indices[3], _indices[4] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
@@ -732,7 +747,7 @@ namespace TableCollections
         public bool TrySlice2(T2 key2, out IndexedTable<T1, T3, T4, T5, TValue> values)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (_indices[1].TryGetValue(key2, out var indices))
+            if (_indices[1].TryGetValue(key2, out var indices) && indices.Count > 0)
             {
                 values = new IndexedTable<T1, T3, T4, T5, TValue>(new[] { _indices[0], _indices[2], _indices[3], _indices[4] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
@@ -745,7 +760,7 @@ namespace TableCollections
         public bool TrySlice3(T3 key3, out IndexedTable<T1, T2, T4, T5, TValue> values)
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-            if (_indices[2].TryGetValue(key3, out var indices))
+            if (_indices[2].TryGetValue(key3, out var indices) && indices.Count > 0)
             {
                 values = new IndexedTable<T1, T2, T4, T5, TValue>(new[] { _indices[0], _indices[1], _indices[3], _indices[4] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
@@ -758,7 +773,7 @@ namespace TableCollections
         public bool TrySlice4(T4 key4, out IndexedTable<T1, T2, T3, T5, TValue> values)
         {
             ExceptionHandling.ThrowIfNull(key4, nameof(key4));
-            if (_indices[3].TryGetValue(key4, out var indices))
+            if (_indices[3].TryGetValue(key4, out var indices) && indices.Count > 0)
             {
                 values = new IndexedTable<T1, T2, T3, T5, TValue>(new[] { _indices[0], _indices[1], _indices[2], _indices[4] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
@@ -771,7 +786,7 @@ namespace TableCollections
         public bool TrySlice5(T5 key5, out IndexedTable<T1, T2, T3, T4, TValue> values)
         {
             ExceptionHandling.ThrowIfNull(key5, nameof(key5));
-            if (_indices[4].TryGetValue(key5, out var indices))
+            if (_indices[4].TryGetValue(key5, out var indices) && indices.Count > 0)
             {
                 values = new IndexedTable<T1, T2, T3, T4, TValue>(new[] { _indices[0], _indices[1], _indices[2], _indices[3] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
@@ -888,13 +903,13 @@ namespace TableCollections
                 ExceptionHandling.ThrowIfNull(key2, nameof(key2));
                 ExceptionHandling.ThrowIfNull(key3, nameof(key3));
                 ExceptionHandling.ThrowIfNull(key4, nameof(key4));
-                if (!_indices[0].TryGetValue(key1, out var indices1))
+                if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
                     throw new ArgumentException($"Key not found {key1}");
-                if (!_indices[1].TryGetValue(key2, out var indices2))
+                if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
                     throw new ArgumentException($"Key not found {key2}");
-                if (!_indices[2].TryGetValue(key3, out var indices3))
+                if (!_indices[2].TryGetValue(key3, out var indices3) || indices3.Count == 0)
                     throw new ArgumentException($"Key not found {key3}");
-                if (!_indices[3].TryGetValue(key4, out var indices4))
+                if (!_indices[3].TryGetValue(key4, out var indices4) || indices4.Count == 0)
                     throw new ArgumentException($"Key not found {key4}");
                 var index = -1;
                 var indices = GetCollapsedIndexsetOrDefault();
@@ -1001,7 +1016,8 @@ namespace TableCollections
 
         public int Remove1(T1 key1)
         {
-            if (!_indices[0].TryGetValue(key1, out var indices1)) return 0;
+            if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
+                return 0;
             foreach (var indices in _collapsedKeys)
             {
                 indices.ExceptWith(indices1);
@@ -1024,7 +1040,8 @@ namespace TableCollections
 
         public int Remove2(T2 key2)
         {
-            if (!_indices[1].TryGetValue(key2, out var indices2)) return 0;
+            if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
+                return 0;
             foreach (var indices in _collapsedKeys)
             {
                 indices.ExceptWith(indices2);
@@ -1047,7 +1064,8 @@ namespace TableCollections
 
         public int Remove3(T3 key3)
         {
-            if (!_indices[2].TryGetValue(key3, out var indices3)) return 0;
+            if (!_indices[2].TryGetValue(key3, out var indices3) || indices3.Count == 0)
+                return 0;
             foreach (var indices in _collapsedKeys)
             {
                 indices.ExceptWith(indices3);
@@ -1070,7 +1088,8 @@ namespace TableCollections
 
         public int Remove4(T4 key4)
         {
-            if (!_indices[3].TryGetValue(key4, out var indices4)) return 0;
+            if (!_indices[3].TryGetValue(key4, out var indices4) || indices4.Count == 0)
+                return 0;
             foreach (var indices in _collapsedKeys)
             {
                 indices.ExceptWith(indices4);
@@ -1091,16 +1110,20 @@ namespace TableCollections
             return removed;
         }
 
+#if NET472 || NET481 || NETSTANDARD2_1
+        public bool TryGetValue(T1 key1, T2 key2, T3 key3, T4 key4, out TValue value)
+#else
         public bool TryGetValue(T1 key1, T2 key2, T3 key3, T4 key4, out TValue? value)
+#endif
         {
             value = default;
-            if (!_indices[0].TryGetValue(key1, out var indices1))
+            if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
                 return false;
-            if (!_indices[1].TryGetValue(key2, out var indices2))
+            if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
                 return false;
-            if (!_indices[2].TryGetValue(key3, out var indices3))
+            if (!_indices[2].TryGetValue(key3, out var indices3) || indices3.Count == 0)
                 return false;
-            if (!_indices[3].TryGetValue(key4, out var indices4))
+            if (!_indices[3].TryGetValue(key4, out var indices4) || indices4.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -1117,7 +1140,7 @@ namespace TableCollections
         public IndexedTable<T2, T3, T4, TValue> Slice1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (!_indices[0].TryGetValue(key1, out var ind))
+            if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key1}");
             }
@@ -1129,7 +1152,7 @@ namespace TableCollections
         public IndexedTable<T1, T3, T4, TValue> Slice2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (!_indices[1].TryGetValue(key2, out var ind))
+            if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key2}");
             }
@@ -1141,7 +1164,7 @@ namespace TableCollections
         public IndexedTable<T1, T2, T4, TValue> Slice3(T3 key3)
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-            if (!_indices[2].TryGetValue(key3, out var ind))
+            if (!_indices[2].TryGetValue(key3, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key3}");
             }
@@ -1153,7 +1176,7 @@ namespace TableCollections
         public IndexedTable<T1, T2, T3, TValue> Slice4(T4 key4)
         {
             ExceptionHandling.ThrowIfNull(key4, nameof(key4));
-            if (!_indices[3].TryGetValue(key4, out var ind))
+            if (!_indices[3].TryGetValue(key4, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key4}");
             }
@@ -1165,7 +1188,7 @@ namespace TableCollections
         public bool ContainsKey1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (!_indices[0].TryGetValue(key1, out var ind))
+            if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -1184,7 +1207,7 @@ namespace TableCollections
         public bool ContainsKey2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (!_indices[1].TryGetValue(key2, out var ind))
+            if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -1203,7 +1226,7 @@ namespace TableCollections
         public bool ContainsKey3(T3 key3)
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-            if (!_indices[2].TryGetValue(key3, out var ind))
+            if (!_indices[2].TryGetValue(key3, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -1222,7 +1245,7 @@ namespace TableCollections
         public bool ContainsKey4(T4 key4)
         {
             ExceptionHandling.ThrowIfNull(key4, nameof(key4));
-            if (!_indices[3].TryGetValue(key4, out var ind))
+            if (!_indices[3].TryGetValue(key4, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -1241,7 +1264,7 @@ namespace TableCollections
         public bool TrySlice1(T1 key1, out IndexedTable<T2, T3, T4, TValue> values)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (_indices[0].TryGetValue(key1, out var indices))
+            if (_indices[0].TryGetValue(key1, out var indices) && indices.Count > 0)
             {
                 values = new IndexedTable<T2, T3, T4, TValue>(new[] { _indices[1], _indices[2], _indices[3] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
@@ -1254,7 +1277,7 @@ namespace TableCollections
         public bool TrySlice2(T2 key2, out IndexedTable<T1, T3, T4, TValue> values)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (_indices[1].TryGetValue(key2, out var indices))
+            if (_indices[1].TryGetValue(key2, out var indices) && indices.Count > 0)
             {
                 values = new IndexedTable<T1, T3, T4, TValue>(new[] { _indices[0], _indices[2], _indices[3] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
@@ -1267,7 +1290,7 @@ namespace TableCollections
         public bool TrySlice3(T3 key3, out IndexedTable<T1, T2, T4, TValue> values)
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-            if (_indices[2].TryGetValue(key3, out var indices))
+            if (_indices[2].TryGetValue(key3, out var indices) && indices.Count > 0)
             {
                 values = new IndexedTable<T1, T2, T4, TValue>(new[] { _indices[0], _indices[1], _indices[3] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
@@ -1280,7 +1303,7 @@ namespace TableCollections
         public bool TrySlice4(T4 key4, out IndexedTable<T1, T2, T3, TValue> values)
         {
             ExceptionHandling.ThrowIfNull(key4, nameof(key4));
-            if (_indices[3].TryGetValue(key4, out var indices))
+            if (_indices[3].TryGetValue(key4, out var indices) && indices.Count > 0)
             {
                 values = new IndexedTable<T1, T2, T3, TValue>(new[] { _indices[0], _indices[1], _indices[2] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
@@ -1389,11 +1412,11 @@ namespace TableCollections
                 ExceptionHandling.ThrowIfNull(key1, nameof(key1));
                 ExceptionHandling.ThrowIfNull(key2, nameof(key2));
                 ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-                if (!_indices[0].TryGetValue(key1, out var indices1))
+                if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
                     throw new ArgumentException($"Key not found {key1}");
-                if (!_indices[1].TryGetValue(key2, out var indices2))
+                if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
                     throw new ArgumentException($"Key not found {key2}");
-                if (!_indices[2].TryGetValue(key3, out var indices3))
+                if (!_indices[2].TryGetValue(key3, out var indices3) || indices3.Count == 0)
                     throw new ArgumentException($"Key not found {key3}");
                 var index = -1;
                 var indices = GetCollapsedIndexsetOrDefault();
@@ -1498,7 +1521,8 @@ namespace TableCollections
 
         public int Remove1(T1 key1)
         {
-            if (!_indices[0].TryGetValue(key1, out var indices1)) return 0;
+            if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
+                return 0;
             foreach (var indices in _collapsedKeys)
             {
                 indices.ExceptWith(indices1);
@@ -1521,7 +1545,8 @@ namespace TableCollections
 
         public int Remove2(T2 key2)
         {
-            if (!_indices[1].TryGetValue(key2, out var indices2)) return 0;
+            if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
+                return 0;
             foreach (var indices in _collapsedKeys)
             {
                 indices.ExceptWith(indices2);
@@ -1544,7 +1569,8 @@ namespace TableCollections
 
         public int Remove3(T3 key3)
         {
-            if (!_indices[2].TryGetValue(key3, out var indices3)) return 0;
+            if (!_indices[2].TryGetValue(key3, out var indices3) || indices3.Count == 0)
+                return 0;
             foreach (var indices in _collapsedKeys)
             {
                 indices.ExceptWith(indices3);
@@ -1565,14 +1591,18 @@ namespace TableCollections
             return removed;
         }
 
+#if NET472 || NET481 || NETSTANDARD2_1
+        public bool TryGetValue(T1 key1, T2 key2, T3 key3, out TValue value)
+#else
         public bool TryGetValue(T1 key1, T2 key2, T3 key3, out TValue? value)
+#endif
         {
             value = default;
-            if (!_indices[0].TryGetValue(key1, out var indices1))
+            if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
                 return false;
-            if (!_indices[1].TryGetValue(key2, out var indices2))
+            if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
                 return false;
-            if (!_indices[2].TryGetValue(key3, out var indices3))
+            if (!_indices[2].TryGetValue(key3, out var indices3) || indices3.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -1588,7 +1618,7 @@ namespace TableCollections
         public IndexedTable<T2, T3, TValue> Slice1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (!_indices[0].TryGetValue(key1, out var ind))
+            if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key1}");
             }
@@ -1600,7 +1630,7 @@ namespace TableCollections
         public IndexedTable<T1, T3, TValue> Slice2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (!_indices[1].TryGetValue(key2, out var ind))
+            if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key2}");
             }
@@ -1612,7 +1642,7 @@ namespace TableCollections
         public IndexedTable<T1, T2, TValue> Slice3(T3 key3)
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-            if (!_indices[2].TryGetValue(key3, out var ind))
+            if (!_indices[2].TryGetValue(key3, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key3}");
             }
@@ -1624,7 +1654,7 @@ namespace TableCollections
         public bool ContainsKey1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (!_indices[0].TryGetValue(key1, out var ind))
+            if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -1643,7 +1673,7 @@ namespace TableCollections
         public bool ContainsKey2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (!_indices[1].TryGetValue(key2, out var ind))
+            if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -1662,7 +1692,7 @@ namespace TableCollections
         public bool ContainsKey3(T3 key3)
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-            if (!_indices[2].TryGetValue(key3, out var ind))
+            if (!_indices[2].TryGetValue(key3, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -1681,7 +1711,7 @@ namespace TableCollections
         public bool TrySlice1(T1 key1, out IndexedTable<T2, T3, TValue> values)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (_indices[0].TryGetValue(key1, out var indices))
+            if (_indices[0].TryGetValue(key1, out var indices) && indices.Count > 0)
             {
                 values = new IndexedTable<T2, T3, TValue>(new[] { _indices[1], _indices[2] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
@@ -1694,7 +1724,7 @@ namespace TableCollections
         public bool TrySlice2(T2 key2, out IndexedTable<T1, T3, TValue> values)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (_indices[1].TryGetValue(key2, out var indices))
+            if (_indices[1].TryGetValue(key2, out var indices) && indices.Count > 0)
             {
                 values = new IndexedTable<T1, T3, TValue>(new[] { _indices[0], _indices[2] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
@@ -1707,7 +1737,7 @@ namespace TableCollections
         public bool TrySlice3(T3 key3, out IndexedTable<T1, T2, TValue> values)
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-            if (_indices[2].TryGetValue(key3, out var indices))
+            if (_indices[2].TryGetValue(key3, out var indices) && indices.Count > 0)
             {
                 values = new IndexedTable<T1, T2, TValue>(new[] { _indices[0], _indices[1] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
@@ -1807,9 +1837,9 @@ namespace TableCollections
             {
                 ExceptionHandling.ThrowIfNull(key1, nameof(key1));
                 ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-                if (!_indices[0].TryGetValue(key1, out var indices1))
+                if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
                     throw new ArgumentException($"Key not found {key1}");
-                if (!_indices[1].TryGetValue(key2, out var indices2))
+                if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
                     throw new ArgumentException($"Key not found {key2}");
                 var index = -1;
                 var indices = GetCollapsedIndexsetOrDefault();
@@ -1912,7 +1942,8 @@ namespace TableCollections
 
         public int Remove1(T1 key1)
         {
-            if (!_indices[0].TryGetValue(key1, out var indices1)) return 0;
+            if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
+                return 0;
             foreach (var indices in _collapsedKeys)
             {
                 indices.ExceptWith(indices1);
@@ -1935,7 +1966,8 @@ namespace TableCollections
 
         public int Remove2(T2 key2)
         {
-            if (!_indices[1].TryGetValue(key2, out var indices2)) return 0;
+            if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
+                return 0;
             foreach (var indices in _collapsedKeys)
             {
                 indices.ExceptWith(indices2);
@@ -1956,12 +1988,16 @@ namespace TableCollections
             return removed;
         }
 
+#if NET472 || NET481 || NETSTANDARD2_1
+        public bool TryGetValue(T1 key1, T2 key2, out TValue value)
+#else
         public bool TryGetValue(T1 key1, T2 key2, out TValue? value)
+#endif
         {
             value = default;
-            if (!_indices[0].TryGetValue(key1, out var indices1))
+            if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
                 return false;
-            if (!_indices[1].TryGetValue(key2, out var indices2))
+            if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -1976,7 +2012,7 @@ namespace TableCollections
         public IndexedTable<T2, TValue> Slice1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (!_indices[0].TryGetValue(key1, out var ind))
+            if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key1}");
             }
@@ -1988,7 +2024,7 @@ namespace TableCollections
         public IndexedTable<T1, TValue> Slice2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (!_indices[1].TryGetValue(key2, out var ind))
+            if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key2}");
             }
@@ -2000,7 +2036,7 @@ namespace TableCollections
         public bool ContainsKey1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (!_indices[0].TryGetValue(key1, out var ind))
+            if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -2019,7 +2055,7 @@ namespace TableCollections
         public bool ContainsKey2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (!_indices[1].TryGetValue(key2, out var ind))
+            if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -2038,7 +2074,7 @@ namespace TableCollections
         public bool TrySlice1(T1 key1, out IndexedTable<T2, TValue> values)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (_indices[0].TryGetValue(key1, out var indices))
+            if (_indices[0].TryGetValue(key1, out var indices) && indices.Count > 0)
             {
                 values = new IndexedTable<T2, TValue>(new[] { _indices[1] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
@@ -2051,7 +2087,7 @@ namespace TableCollections
         public bool TrySlice2(T2 key2, out IndexedTable<T1, TValue> values)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (_indices[1].TryGetValue(key2, out var indices))
+            if (_indices[1].TryGetValue(key2, out var indices) && indices.Count > 0)
             {
                 values = new IndexedTable<T1, TValue>(new[] { _indices[0] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
@@ -2132,7 +2168,7 @@ namespace TableCollections
             get
             {
                 ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-                if (!_indices[0].TryGetValue(key1, out var indices1))
+                if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
                     throw new ArgumentException($"Key not found {key1}");
                 IEnumerable<int> filtered = indices1;
                 foreach (var ck in _collapsedKeys)
@@ -2196,24 +2232,14 @@ namespace TableCollections
             this[key1] = value;
         }
 
-        public int Remove(T1 key1)
-        {
-            if (!_indices[0].TryGetValue(key1, out var indices1)) return 0;
-            foreach (var indices in _collapsedKeys)
-            {
-                indices.ExceptWith(indices1);
-            }
-            var removed = indices1.Count;
-            _unusedIndices.UnionWith(indices1);
-            indices1.Clear();
-            CheckCompact();
-            return removed;
-        }
-
+#if NET472 || NET481 || NETSTANDARD2_1
+        public bool TryGetValue(T1 key1, out TValue value)
+#else
         public bool TryGetValue(T1 key1, out TValue? value)
+#endif
         {
             value = default;
-            if (!_indices[0].TryGetValue(key1, out var indices1))
+            if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -2227,7 +2253,7 @@ namespace TableCollections
         public bool ContainsKey(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (!_indices[0].TryGetValue(key1, out var ind))
+            if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
