@@ -1,4 +1,4 @@
 {
-    "dotnet-test-explorer.testProjectPath": "src/TableCollections.Tests/TableCollections.Tests.csproj",
+    "dotnet-test-explorer.testProjectPath": "src/MultiKeyCollections.Tests/MultiKeyCollections.Tests.csproj",
     "dotnet-test-explorer.testArguments": "/p:CollectCoverage=true /p:CoverletOutputFormat=lcov /p:CoverletOutput=./lcov.info",
 }

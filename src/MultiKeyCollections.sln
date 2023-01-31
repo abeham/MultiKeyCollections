@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TableCollections", "TableCollections\TableCollections.csproj", "{48CFBBAB-0D1E-4F2F-9E60-8FFB972AED66}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MultiKeyCollections", "MultiKeyCollections\MultiKeyCollections.csproj", "{48CFBBAB-0D1E-4F2F-9E60-8FFB972AED66}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TableCollections.Tests", "TableCollections.Tests\TableCollections.Tests.csproj", "{36CAE759-2885-4B3D-8C57-8EE879FD048A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MultiKeyCollections.Tests", "MultiKeyCollections.Tests\MultiKeyCollections.Tests.csproj", "{36CAE759-2885-4B3D-8C57-8EE879FD048A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

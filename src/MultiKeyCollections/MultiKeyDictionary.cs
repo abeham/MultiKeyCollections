@@ -6,7 +6,7 @@ using System.Runtime.CompilerServices;
 
 namespace TableCollections
 {
-    public class IndexedTable<TValue> : IEnumerable<TValue>
+    public class MultiKeyDictionary<TValue> : IEnumerable<TValue>
     {
         protected IList<IDictionary<object, ISet<int>>> _indices;
         protected IList<TValue> _data;
@@ -29,7 +29,7 @@ namespace TableCollections
         /// <value>The relative number of unused indices (relative to the full size of the array) before a compaction is performed.</value>
         public double CompactingRelativeThreshold { get; set; } = 0.5;
 
-        protected IndexedTable()
+        protected MultiKeyDictionary()
         {
             _indices = new List<IDictionary<object, ISet<int>>>();
             _data = new List<TValue>();
@@ -37,7 +37,7 @@ namespace TableCollections
             _unusedIndices = new HashSet<int>();
         }
 
-        protected internal IndexedTable(IList<IDictionary<object, ISet<int>>> indices,
+        protected internal MultiKeyDictionary(IList<IDictionary<object, ISet<int>>> indices,
             IList<TValue> data, IList<ISet<int>> collapsedKeys, ISet<int> unusedIndices)
         {
             _indices = indices;
@@ -285,7 +285,7 @@ namespace TableCollections
         }
     }
 
-    public class IndexedTable<T1, T2, T3, T4, T5, TValue> : IndexedTable<TValue>
+    public class MultiKeyDictionary<T1, T2, T3, T4, T5, TValue> : MultiKeyDictionary<TValue>
 #if !(NET472 || NET481)
         where T1 : notnull
         where T2 : notnull
@@ -294,10 +294,10 @@ namespace TableCollections
         where T5 : notnull
 #endif
     {
-        protected internal IndexedTable(IList<IDictionary<object, ISet<int>>> indices,
+        protected internal MultiKeyDictionary(IList<IDictionary<object, ISet<int>>> indices,
             IList<TValue> data, IList<ISet<int>> collapsedKeys, ISet<int> unusedIndices) : base(indices, data, collapsedKeys, unusedIndices) { }
-        public IndexedTable() : this(new KeyValuePair<(T1, T2, T3, T4, T5), TValue>[0]) { }
-        public IndexedTable(IEnumerable<KeyValuePair<(T1, T2, T3, T4, T5), TValue>> data)
+        public MultiKeyDictionary() : this(new KeyValuePair<(T1, T2, T3, T4, T5), TValue>[0]) { }
+        public MultiKeyDictionary(IEnumerable<KeyValuePair<(T1, T2, T3, T4, T5), TValue>> data)
         {
             for (var i = 0; i < 5; i++)
                 _indices.Add(new Dictionary<object, ISet<int>>());
@@ -318,7 +318,7 @@ namespace TableCollections
                 }
             }
         }
-        public IndexedTable(IEnumerable<(T1, T2, T3, T4, T5, TValue)> data)
+        public MultiKeyDictionary(IEnumerable<(T1, T2, T3, T4, T5, TValue)> data)
         {
             for (var i = 0; i < 5; i++)
                 _indices.Add(new Dictionary<object, ISet<int>>());
@@ -614,62 +614,62 @@ namespace TableCollections
             return true;
         }
 
-        public IndexedTable<T2, T3, T4, T5, TValue> Slice1(T1 key1)
+        public MultiKeyDictionary<T2, T3, T4, T5, TValue> Slice1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
             if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key1}");
             }
-            return new IndexedTable<T2, T3, T4, T5, TValue>(
+            return new MultiKeyDictionary<T2, T3, T4, T5, TValue>(
                 new[] { _indices[1], _indices[2], _indices[3], _indices[4] },
                 _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
-        public IndexedTable<T1, T3, T4, T5, TValue> Slice2(T2 key2)
+        public MultiKeyDictionary<T1, T3, T4, T5, TValue> Slice2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
             if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key2}");
             }
-            return new IndexedTable<T1, T3, T4, T5, TValue>(
+            return new MultiKeyDictionary<T1, T3, T4, T5, TValue>(
                 new[] { _indices[0], _indices[2], _indices[3], _indices[4] },
                 _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
-        public IndexedTable<T1, T2, T4, T5, TValue> Slice3(T3 key3)
+        public MultiKeyDictionary<T1, T2, T4, T5, TValue> Slice3(T3 key3)
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
             if (!_indices[2].TryGetValue(key3, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key3}");
             }
-            return new IndexedTable<T1, T2, T4, T5, TValue>(
+            return new MultiKeyDictionary<T1, T2, T4, T5, TValue>(
                 new[] { _indices[0], _indices[1], _indices[3], _indices[4] },
                 _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
-        public IndexedTable<T1, T2, T3, T5, TValue> Slice4(T4 key4)
+        public MultiKeyDictionary<T1, T2, T3, T5, TValue> Slice4(T4 key4)
         {
             ExceptionHandling.ThrowIfNull(key4, nameof(key4));
             if (!_indices[3].TryGetValue(key4, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key4}");
             }
-            return new IndexedTable<T1, T2, T3, T5, TValue>(
+            return new MultiKeyDictionary<T1, T2, T3, T5, TValue>(
                 new[] { _indices[0], _indices[1], _indices[2], _indices[4] },
                 _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
-        public IndexedTable<T1, T2, T3, T4, TValue> Slice5(T5 key5)
+        public MultiKeyDictionary<T1, T2, T3, T4, TValue> Slice5(T5 key5)
         {
             ExceptionHandling.ThrowIfNull(key5, nameof(key5));
             if (!_indices[4].TryGetValue(key5, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key5}");
             }
-            return new IndexedTable<T1, T2, T3, T4, TValue>(
+            return new MultiKeyDictionary<T1, T2, T3, T4, TValue>(
                 new[] { _indices[0], _indices[1], _indices[2], _indices[3] },
                 _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
@@ -770,15 +770,15 @@ namespace TableCollections
         }
 
 #if (NET472 || NET481 || NETSTANDARD2_1)
-        public bool TrySlice1(T1 key1, out IndexedTable<T2, T3, T4, T5, TValue> values)
+        public bool TrySlice1(T1 key1, out MultiKeyDictionary<T2, T3, T4, T5, TValue> values)
 #else
-        public bool TrySlice1(T1 key1, out IndexedTable<T2, T3, T4, T5, TValue>? values)
+        public bool TrySlice1(T1 key1, out MultiKeyDictionary<T2, T3, T4, T5, TValue>? values)
 #endif
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
             if (_indices[0].TryGetValue(key1, out var indices) && indices.Count > 0)
             {
-                values = new IndexedTable<T2, T3, T4, T5, TValue>(new[] { _indices[1], _indices[2], _indices[3], _indices[4] },
+                values = new MultiKeyDictionary<T2, T3, T4, T5, TValue>(new[] { _indices[1], _indices[2], _indices[3], _indices[4] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
@@ -787,15 +787,15 @@ namespace TableCollections
         }
 
 #if (NET472 || NET481 || NETSTANDARD2_1)
-        public bool TrySlice2(T2 key2, out IndexedTable<T1, T3, T4, T5, TValue> values)
+        public bool TrySlice2(T2 key2, out MultiKeyDictionary<T1, T3, T4, T5, TValue> values)
 #else
-        public bool TrySlice2(T2 key2, out IndexedTable<T1, T3, T4, T5, TValue>? values)
+        public bool TrySlice2(T2 key2, out MultiKeyDictionary<T1, T3, T4, T5, TValue>? values)
 #endif
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
             if (_indices[1].TryGetValue(key2, out var indices) && indices.Count > 0)
             {
-                values = new IndexedTable<T1, T3, T4, T5, TValue>(new[] { _indices[0], _indices[2], _indices[3], _indices[4] },
+                values = new MultiKeyDictionary<T1, T3, T4, T5, TValue>(new[] { _indices[0], _indices[2], _indices[3], _indices[4] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
@@ -804,15 +804,15 @@ namespace TableCollections
         }
 
 #if (NET472 || NET481 || NETSTANDARD2_1)
-        public bool TrySlice3(T3 key3, out IndexedTable<T1, T2, T4, T5, TValue> values)
+        public bool TrySlice3(T3 key3, out MultiKeyDictionary<T1, T2, T4, T5, TValue> values)
 #else
-        public bool TrySlice3(T3 key3, out IndexedTable<T1, T2, T4, T5, TValue>? values)
+        public bool TrySlice3(T3 key3, out MultiKeyDictionary<T1, T2, T4, T5, TValue>? values)
 #endif
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
             if (_indices[2].TryGetValue(key3, out var indices) && indices.Count > 0)
             {
-                values = new IndexedTable<T1, T2, T4, T5, TValue>(new[] { _indices[0], _indices[1], _indices[3], _indices[4] },
+                values = new MultiKeyDictionary<T1, T2, T4, T5, TValue>(new[] { _indices[0], _indices[1], _indices[3], _indices[4] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
@@ -821,15 +821,15 @@ namespace TableCollections
         }
 
 #if (NET472 || NET481 || NETSTANDARD2_1)
-        public bool TrySlice4(T4 key4, out IndexedTable<T1, T2, T3, T5, TValue> values)
+        public bool TrySlice4(T4 key4, out MultiKeyDictionary<T1, T2, T3, T5, TValue> values)
 #else
-        public bool TrySlice4(T4 key4, out IndexedTable<T1, T2, T3, T5, TValue>? values)
+        public bool TrySlice4(T4 key4, out MultiKeyDictionary<T1, T2, T3, T5, TValue>? values)
 #endif
         {
             ExceptionHandling.ThrowIfNull(key4, nameof(key4));
             if (_indices[3].TryGetValue(key4, out var indices) && indices.Count > 0)
             {
-                values = new IndexedTable<T1, T2, T3, T5, TValue>(new[] { _indices[0], _indices[1], _indices[2], _indices[4] },
+                values = new MultiKeyDictionary<T1, T2, T3, T5, TValue>(new[] { _indices[0], _indices[1], _indices[2], _indices[4] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
@@ -838,15 +838,15 @@ namespace TableCollections
         }
 
 #if (NET472 || NET481 || NETSTANDARD2_1)
-        public bool TrySlice5(T5 key5, out IndexedTable<T1, T2, T3, T4, TValue> values)
+        public bool TrySlice5(T5 key5, out MultiKeyDictionary<T1, T2, T3, T4, TValue> values)
 #else
-        public bool TrySlice5(T5 key5, out IndexedTable<T1, T2, T3, T4, TValue>? values)
+        public bool TrySlice5(T5 key5, out MultiKeyDictionary<T1, T2, T3, T4, TValue>? values)
 #endif
         {
             ExceptionHandling.ThrowIfNull(key5, nameof(key5));
             if (_indices[4].TryGetValue(key5, out var indices) && indices.Count > 0)
             {
-                values = new IndexedTable<T1, T2, T3, T4, TValue>(new[] { _indices[0], _indices[1], _indices[2], _indices[3] },
+                values = new MultiKeyDictionary<T1, T2, T3, T4, TValue>(new[] { _indices[0], _indices[1], _indices[2], _indices[3] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
@@ -897,9 +897,11 @@ namespace TableCollections
                 yield return ((T1)r1Iter.Current.Item1, (T2)r2Iter.Current.Item1, (T3)r3Iter.Current.Item1, (T4)r4Iter.Current.Item1, (T5)r5Iter.Current.Item1, _data[r1Iter.Current.Item2]);
             }
         }
+
+        public Dictionary<(T1, T2, T3, T4, T5), TValue> ToDictionary() => Enumerate().ToDictionary(x => (x.Item1, x.Item2, x.Item3, x.Item4, x.Item5), x => x.Item6);
     }
 
-    public class IndexedTable<T1, T2, T3, T4, TValue> : IndexedTable<TValue>
+    public class MultiKeyDictionary<T1, T2, T3, T4, TValue> : MultiKeyDictionary<TValue>
 #if !(NET472 || NET481)
         where T1 : notnull
         where T2 : notnull
@@ -907,10 +909,10 @@ namespace TableCollections
         where T4 : notnull
 #endif
     {
-        protected internal IndexedTable(IList<IDictionary<object, ISet<int>>> indices,
+        protected internal MultiKeyDictionary(IList<IDictionary<object, ISet<int>>> indices,
             IList<TValue> data, IList<ISet<int>> collapsedKeys, ISet<int> unusedIndices) : base(indices, data, collapsedKeys, unusedIndices) { }
-        public IndexedTable() : this(new KeyValuePair<(T1, T2, T3, T4), TValue>[0]) { }
-        public IndexedTable(IEnumerable<KeyValuePair<(T1, T2, T3, T4), TValue>> data)
+        public MultiKeyDictionary() : this(new KeyValuePair<(T1, T2, T3, T4), TValue>[0]) { }
+        public MultiKeyDictionary(IEnumerable<KeyValuePair<(T1, T2, T3, T4), TValue>> data)
         {
             for (var i = 0; i < 4; i++)
                 _indices.Add(new Dictionary<object, ISet<int>>());
@@ -931,7 +933,7 @@ namespace TableCollections
                 }
             }
         }
-        public IndexedTable(IEnumerable<(T1, T2, T3, T4, TValue)> data)
+        public MultiKeyDictionary(IEnumerable<(T1, T2, T3, T4, TValue)> data)
         {
             for (var i = 0; i < 4; i++)
                 _indices.Add(new Dictionary<object, ISet<int>>());
@@ -1195,50 +1197,50 @@ namespace TableCollections
             return true;
         }
 
-        public IndexedTable<T2, T3, T4, TValue> Slice1(T1 key1)
+        public MultiKeyDictionary<T2, T3, T4, TValue> Slice1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
             if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key1}");
             }
-            return new IndexedTable<T2, T3, T4, TValue>(
+            return new MultiKeyDictionary<T2, T3, T4, TValue>(
                 new[] { _indices[1], _indices[2], _indices[3] },
                 _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
-        public IndexedTable<T1, T3, T4, TValue> Slice2(T2 key2)
+        public MultiKeyDictionary<T1, T3, T4, TValue> Slice2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
             if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key2}");
             }
-            return new IndexedTable<T1, T3, T4, TValue>(
+            return new MultiKeyDictionary<T1, T3, T4, TValue>(
                 new[] { _indices[0], _indices[2], _indices[3] },
                 _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
-        public IndexedTable<T1, T2, T4, TValue> Slice3(T3 key3)
+        public MultiKeyDictionary<T1, T2, T4, TValue> Slice3(T3 key3)
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
             if (!_indices[2].TryGetValue(key3, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key3}");
             }
-            return new IndexedTable<T1, T2, T4, TValue>(
+            return new MultiKeyDictionary<T1, T2, T4, TValue>(
                 new[] { _indices[0], _indices[1], _indices[3] },
                 _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
-        public IndexedTable<T1, T2, T3, TValue> Slice4(T4 key4)
+        public MultiKeyDictionary<T1, T2, T3, TValue> Slice4(T4 key4)
         {
             ExceptionHandling.ThrowIfNull(key4, nameof(key4));
             if (!_indices[3].TryGetValue(key4, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key4}");
             }
-            return new IndexedTable<T1, T2, T3, TValue>(
+            return new MultiKeyDictionary<T1, T2, T3, TValue>(
                 new[] { _indices[0], _indices[1], _indices[2] },
                 _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
@@ -1320,15 +1322,15 @@ namespace TableCollections
         }
 
 #if (NET472 || NET481 || NETSTANDARD2_1)
-        public bool TrySlice1(T1 key1, out IndexedTable<T2, T3, T4, TValue> values)
+        public bool TrySlice1(T1 key1, out MultiKeyDictionary<T2, T3, T4, TValue> values)
 #else
-        public bool TrySlice1(T1 key1, out IndexedTable<T2, T3, T4, TValue>? values)
+        public bool TrySlice1(T1 key1, out MultiKeyDictionary<T2, T3, T4, TValue>? values)
 #endif
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
             if (_indices[0].TryGetValue(key1, out var indices) && indices.Count > 0)
             {
-                values = new IndexedTable<T2, T3, T4, TValue>(new[] { _indices[1], _indices[2], _indices[3] },
+                values = new MultiKeyDictionary<T2, T3, T4, TValue>(new[] { _indices[1], _indices[2], _indices[3] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
@@ -1337,15 +1339,15 @@ namespace TableCollections
         }
 
 #if (NET472 || NET481 || NETSTANDARD2_1)
-        public bool TrySlice2(T2 key2, out IndexedTable<T1, T3, T4, TValue> values)
+        public bool TrySlice2(T2 key2, out MultiKeyDictionary<T1, T3, T4, TValue> values)
 #else
-        public bool TrySlice2(T2 key2, out IndexedTable<T1, T3, T4, TValue>? values)
+        public bool TrySlice2(T2 key2, out MultiKeyDictionary<T1, T3, T4, TValue>? values)
 #endif
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
             if (_indices[1].TryGetValue(key2, out var indices) && indices.Count > 0)
             {
-                values = new IndexedTable<T1, T3, T4, TValue>(new[] { _indices[0], _indices[2], _indices[3] },
+                values = new MultiKeyDictionary<T1, T3, T4, TValue>(new[] { _indices[0], _indices[2], _indices[3] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
@@ -1354,15 +1356,15 @@ namespace TableCollections
         }
 
 #if (NET472 || NET481 || NETSTANDARD2_1)
-        public bool TrySlice3(T3 key3, out IndexedTable<T1, T2, T4, TValue> values)
+        public bool TrySlice3(T3 key3, out MultiKeyDictionary<T1, T2, T4, TValue> values)
 #else
-        public bool TrySlice3(T3 key3, out IndexedTable<T1, T2, T4, TValue>? values)
+        public bool TrySlice3(T3 key3, out MultiKeyDictionary<T1, T2, T4, TValue>? values)
 #endif
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
             if (_indices[2].TryGetValue(key3, out var indices) && indices.Count > 0)
             {
-                values = new IndexedTable<T1, T2, T4, TValue>(new[] { _indices[0], _indices[1], _indices[3] },
+                values = new MultiKeyDictionary<T1, T2, T4, TValue>(new[] { _indices[0], _indices[1], _indices[3] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
@@ -1371,15 +1373,15 @@ namespace TableCollections
         }
 
 #if (NET472 || NET481 || NETSTANDARD2_1)
-        public bool TrySlice4(T4 key4, out IndexedTable<T1, T2, T3, TValue> values)
+        public bool TrySlice4(T4 key4, out MultiKeyDictionary<T1, T2, T3, TValue> values)
 #else
-        public bool TrySlice4(T4 key4, out IndexedTable<T1, T2, T3, TValue>? values)
+        public bool TrySlice4(T4 key4, out MultiKeyDictionary<T1, T2, T3, TValue>? values)
 #endif
         {
             ExceptionHandling.ThrowIfNull(key4, nameof(key4));
             if (_indices[3].TryGetValue(key4, out var indices) && indices.Count > 0)
             {
-                values = new IndexedTable<T1, T2, T3, TValue>(new[] { _indices[0], _indices[1], _indices[2] },
+                values = new MultiKeyDictionary<T1, T2, T3, TValue>(new[] { _indices[0], _indices[1], _indices[2] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
@@ -1423,9 +1425,11 @@ namespace TableCollections
                 yield return ((T1)r1Iter.Current.Item1, (T2)r2Iter.Current.Item1, (T3)r3Iter.Current.Item1, (T4)r4Iter.Current.Item1, _data[r1Iter.Current.Item2]);
             }
         }
+
+        public Dictionary<(T1, T2, T3, T4), TValue> ToDictionary() => Enumerate().ToDictionary(x => (x.Item1, x.Item2, x.Item3, x.Item4), x => x.Item5);
     }
 
-    public class IndexedTable<T1, T2, T3, TValue> : IndexedTable<TValue>
+    public class MultiKeyDictionary<T1, T2, T3, TValue> : MultiKeyDictionary<TValue>
 #if !(NET472 || NET481)
         where T1 : notnull
         where T2 : notnull
@@ -1433,10 +1437,10 @@ namespace TableCollections
 #endif
     {
 
-        protected internal IndexedTable(IList<IDictionary<object, ISet<int>>> indices,
+        protected internal MultiKeyDictionary(IList<IDictionary<object, ISet<int>>> indices,
             IList<TValue> data, IList<ISet<int>> collapsedKeys, ISet<int> unusedIndices) : base(indices, data, collapsedKeys, unusedIndices) { }
-        public IndexedTable() : this(new KeyValuePair<(T1, T2, T3), TValue>[0]) { }
-        public IndexedTable(IEnumerable<KeyValuePair<(T1, T2, T3), TValue>> data)
+        public MultiKeyDictionary() : this(new KeyValuePair<(T1, T2, T3), TValue>[0]) { }
+        public MultiKeyDictionary(IEnumerable<KeyValuePair<(T1, T2, T3), TValue>> data)
         {
             for (var i = 0; i < 3; i++)
                 _indices.Add(new Dictionary<object, ISet<int>>());
@@ -1457,7 +1461,7 @@ namespace TableCollections
                 }
             }
         }
-        public IndexedTable(IEnumerable<(T1, T2, T3, TValue)> data)
+        public MultiKeyDictionary(IEnumerable<(T1, T2, T3, TValue)> data)
         {
             for (var i = 0; i < 3; i++)
                 _indices.Add(new Dictionary<object, ISet<int>>());
@@ -1689,38 +1693,38 @@ namespace TableCollections
             return true;
         }
 
-        public IndexedTable<T2, T3, TValue> Slice1(T1 key1)
+        public MultiKeyDictionary<T2, T3, TValue> Slice1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
             if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key1}");
             }
-            return new IndexedTable<T2, T3, TValue>(
+            return new MultiKeyDictionary<T2, T3, TValue>(
                 new[] { _indices[1], _indices[2] },
                 _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
-        public IndexedTable<T1, T3, TValue> Slice2(T2 key2)
+        public MultiKeyDictionary<T1, T3, TValue> Slice2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
             if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key2}");
             }
-            return new IndexedTable<T1, T3, TValue>(
+            return new MultiKeyDictionary<T1, T3, TValue>(
                 new[] { _indices[0], _indices[2] },
                 _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
-        public IndexedTable<T1, T2, TValue> Slice3(T3 key3)
+        public MultiKeyDictionary<T1, T2, TValue> Slice3(T3 key3)
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
             if (!_indices[2].TryGetValue(key3, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key3}");
             }
-            return new IndexedTable<T1, T2, TValue>(
+            return new MultiKeyDictionary<T1, T2, TValue>(
                 new[] { _indices[0], _indices[1] },
                 _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
@@ -1783,15 +1787,15 @@ namespace TableCollections
         }
 
 #if (NET472 || NET481 || NETSTANDARD2_1)
-        public bool TrySlice1(T1 key1, out IndexedTable<T2, T3, TValue> values)
+        public bool TrySlice1(T1 key1, out MultiKeyDictionary<T2, T3, TValue> values)
 #else
-        public bool TrySlice1(T1 key1, out IndexedTable<T2, T3, TValue>? values)
+        public bool TrySlice1(T1 key1, out MultiKeyDictionary<T2, T3, TValue>? values)
 #endif
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
             if (_indices[0].TryGetValue(key1, out var indices) && indices.Count > 0)
             {
-                values = new IndexedTable<T2, T3, TValue>(new[] { _indices[1], _indices[2] },
+                values = new MultiKeyDictionary<T2, T3, TValue>(new[] { _indices[1], _indices[2] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
@@ -1800,15 +1804,15 @@ namespace TableCollections
         }
 
 #if (NET472 || NET481 || NETSTANDARD2_1)
-        public bool TrySlice2(T2 key2, out IndexedTable<T1, T3, TValue> values)
+        public bool TrySlice2(T2 key2, out MultiKeyDictionary<T1, T3, TValue> values)
 #else
-        public bool TrySlice2(T2 key2, out IndexedTable<T1, T3, TValue>? values)
+        public bool TrySlice2(T2 key2, out MultiKeyDictionary<T1, T3, TValue>? values)
 #endif
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
             if (_indices[1].TryGetValue(key2, out var indices) && indices.Count > 0)
             {
-                values = new IndexedTable<T1, T3, TValue>(new[] { _indices[0], _indices[2] },
+                values = new MultiKeyDictionary<T1, T3, TValue>(new[] { _indices[0], _indices[2] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
@@ -1817,15 +1821,15 @@ namespace TableCollections
         }
 
 #if (NET472 || NET481 || NETSTANDARD2_1)
-        public bool TrySlice3(T3 key3, out IndexedTable<T1, T2, TValue> values)
+        public bool TrySlice3(T3 key3, out MultiKeyDictionary<T1, T2, TValue> values)
 #else
-        public bool TrySlice3(T3 key3, out IndexedTable<T1, T2, TValue>? values)
+        public bool TrySlice3(T3 key3, out MultiKeyDictionary<T1, T2, TValue>? values)
 #endif
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
             if (_indices[2].TryGetValue(key3, out var indices) && indices.Count > 0)
             {
-                values = new IndexedTable<T1, T2, TValue>(new[] { _indices[0], _indices[1] },
+                values = new MultiKeyDictionary<T1, T2, TValue>(new[] { _indices[0], _indices[1] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
@@ -1862,19 +1866,21 @@ namespace TableCollections
                 yield return ((T1)r1Iter.Current.Item1, (T2)r2Iter.Current.Item1, (T3)r3Iter.Current.Item1, _data[r1Iter.Current.Item2]);
             }
         }
+        
+        public Dictionary<(T1, T2, T3), TValue> ToDictionary() => Enumerate().ToDictionary(x => (x.Item1, x.Item2, x.Item3), x => x.Item4);
     }
 
-    public class IndexedTable<T1, T2, TValue> : IndexedTable<TValue>
+    public class MultiKeyDictionary<T1, T2, TValue> : MultiKeyDictionary<TValue>
 #if !(NET472 || NET481)
         where T1 : notnull
         where T2 : notnull
 #endif
     {
 
-        protected internal IndexedTable(IList<IDictionary<object, ISet<int>>> indices,
+        protected internal MultiKeyDictionary(IList<IDictionary<object, ISet<int>>> indices,
             IList<TValue> data, IList<ISet<int>> collapsedKeys, ISet<int> unusedIndices) : base(indices, data, collapsedKeys, unusedIndices) { }
-        public IndexedTable() : this(new KeyValuePair<(T1, T2), TValue>[0]) { }
-        public IndexedTable(IEnumerable<KeyValuePair<(T1, T2), TValue>> data)
+        public MultiKeyDictionary() : this(new KeyValuePair<(T1, T2), TValue>[0]) { }
+        public MultiKeyDictionary(IEnumerable<KeyValuePair<(T1, T2), TValue>> data)
         {
             for (var i = 0; i < 2; i++)
                 _indices.Add(new Dictionary<object, ISet<int>>());
@@ -1895,7 +1901,7 @@ namespace TableCollections
                 }
             }
         }
-        public IndexedTable(IEnumerable<(T1, T2, TValue)> data)
+        public MultiKeyDictionary(IEnumerable<(T1, T2, TValue)> data)
         {
             for (var i = 0; i < 2; i++)
                 _indices.Add(new Dictionary<object, ISet<int>>());
@@ -2095,26 +2101,26 @@ namespace TableCollections
             return true;
         }
 
-        public IndexedTable<T2, TValue> Slice1(T1 key1)
+        public MultiKeyDictionary<T2, TValue> Slice1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
             if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key1}");
             }
-            return new IndexedTable<T2, TValue>(
+            return new MultiKeyDictionary<T2, TValue>(
                 new[] { _indices[1] },
                 _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
 
-        public IndexedTable<T1, TValue> Slice2(T2 key2)
+        public MultiKeyDictionary<T1, TValue> Slice2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
             if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
             {
                 throw new ArgumentException($"Key not found {key2}");
             }
-            return new IndexedTable<T1, TValue>(
+            return new MultiKeyDictionary<T1, TValue>(
                 new[] { _indices[0] },
                 _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
         }
@@ -2158,15 +2164,15 @@ namespace TableCollections
         }
 
 #if (NET472 || NET481 || NETSTANDARD2_1)
-        public bool TrySlice1(T1 key1, out IndexedTable<T2, TValue> values)
+        public bool TrySlice1(T1 key1, out MultiKeyDictionary<T2, TValue> values)
 #else
-        public bool TrySlice1(T1 key1, out IndexedTable<T2, TValue>? values)
+        public bool TrySlice1(T1 key1, out MultiKeyDictionary<T2, TValue>? values)
 #endif
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
             if (_indices[0].TryGetValue(key1, out var indices) && indices.Count > 0)
             {
-                values = new IndexedTable<T2, TValue>(new[] { _indices[1] },
+                values = new MultiKeyDictionary<T2, TValue>(new[] { _indices[1] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
@@ -2175,15 +2181,15 @@ namespace TableCollections
         }
 
 #if (NET472 || NET481 || NETSTANDARD2_1)
-        public bool TrySlice2(T2 key2, out IndexedTable<T1, TValue> values)
+        public bool TrySlice2(T2 key2, out MultiKeyDictionary<T1, TValue> values)
 #else
-        public bool TrySlice2(T2 key2, out IndexedTable<T1, TValue>? values)
+        public bool TrySlice2(T2 key2, out MultiKeyDictionary<T1, TValue>? values)
 #endif
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
             if (_indices[1].TryGetValue(key2, out var indices) && indices.Count > 0)
             {
-                values = new IndexedTable<T1, TValue>(new[] { _indices[0] },
+                values = new MultiKeyDictionary<T1, TValue>(new[] { _indices[0] },
                 _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
                 return true;
             }
@@ -2213,17 +2219,19 @@ namespace TableCollections
                 yield return ((T1)r1Iter.Current.Item1, (T2)r2Iter.Current.Item1, _data[r1Iter.Current.Item2]);
             }
         }
+        
+        public Dictionary<(T1, T2), TValue> ToDictionary() => Enumerate().ToDictionary(x => (x.Item1, x.Item2), x => x.Item3);
     }
 
-    public class IndexedTable<T1, TValue> : IndexedTable<TValue>
+    public class MultiKeyDictionary<T1, TValue> : MultiKeyDictionary<TValue>
 #if !(NET472 || NET481)
         where T1 : notnull
 #endif
     {
-        protected internal IndexedTable(IList<IDictionary<object, ISet<int>>> indices,
+        protected internal MultiKeyDictionary(IList<IDictionary<object, ISet<int>>> indices,
             IList<TValue> data, IList<ISet<int>> collapsedKeys, ISet<int> unusedIndices) : base(indices, data, collapsedKeys, unusedIndices) { }
-        public IndexedTable() : this(new KeyValuePair<T1, TValue>[0]) { }
-        public IndexedTable(IEnumerable<KeyValuePair<T1, TValue>> data)
+        public MultiKeyDictionary() : this(new KeyValuePair<T1, TValue>[0]) { }
+        public MultiKeyDictionary(IEnumerable<KeyValuePair<T1, TValue>> data)
         {
             _indices.Add(new Dictionary<object, ISet<int>>());
 
@@ -2239,7 +2247,7 @@ namespace TableCollections
                 ind.Add(idx);
             }
         }
-        public IndexedTable(IEnumerable<(T1, TValue)> data)
+        public MultiKeyDictionary(IEnumerable<(T1, TValue)> data)
         {
             for (var i = 0; i < 2; i++)
                 _indices.Add(new Dictionary<object, ISet<int>>());
@@ -2376,9 +2384,6 @@ namespace TableCollections
             }
         }
 
-        public Dictionary<T1, TValue> ToDictionary()
-        {
-            return Enumerate(false).ToDictionary(x => x.Item1, x => x.Item2);
-        }
+        public Dictionary<T1, TValue> ToDictionary() => Enumerate(false).ToDictionary(x => x.Item1, x => x.Item2);
     }
 }

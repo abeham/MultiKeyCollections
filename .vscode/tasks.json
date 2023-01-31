@@ -7,7 +7,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/src/TableCollections.Tests/TableCollections.Tests.csproj",
+                "${workspaceFolder}/src/MultiKeyCollections.Tests/MultiKeyCollections.Tests.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],
@@ -19,7 +19,7 @@
             "type": "process",
             "args": [
                 "publish",
-                "${workspaceFolder}/src/TableCollections/TableCollections.csproj",
+                "${workspaceFolder}/src/MultiKeyCollections/MultiKeyCollections.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],
