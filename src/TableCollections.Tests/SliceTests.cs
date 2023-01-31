@@ -408,4 +408,131 @@ public class SliceTests
         Assert.True(table2.ContainsKey2("b4"));
         Assert.Equal(4, table2["a1", "b4"]);
     }
+
+    [Fact]
+    public void TestSlicingWithClear()
+    {
+        var table5 = new IndexedTable<string, string, string, string, string, int>();
+        table5["a1", "b1", "c1", "d1", "e1"] = 1;
+        table5["a1", "b2", "c1", "d2", "e2"] = 2;
+        table5["a1", "b3", "c2", "d1", "e3"] = 3;
+        table5["a2", "b1", "c2", "d2", "e4"] = 4;
+        table5["a2", "b2", "c3", "d1", "e5"] = 5;
+        table5["a2", "b3", "c3", "d2", "e6"] = 6;
+
+        Assert.Equal(6, table5.Count);
+        var slice45 = table5.Slice1("a1");
+        slice45.Clear();
+        Assert.Equal(3, table5.Count);
+        Assert.Equal(0, slice45.Count);
+        slice45["b1", "c1", "d1", "e1"] = 1;
+        Assert.Equal(4, table5.Count);
+        Assert.True(table5.Contains("a1", "b1", "c1", "d1", "e1"));
+        Assert.Equal(1, slice45.Count);
+        Assert.True(slice45.Contains("b1", "c1", "d1", "e1"));
+        table5.Clear();
+        Assert.Equal(0, table5.Count);
+        Assert.Equal(0, slice45.Count);
+        table5["a1", "b1", "c1", "d1", "e1"] = 1;
+        Assert.Equal(1, table5.Count);
+        Assert.Equal(1, slice45.Count);
+        Assert.True(table5.Contains("a1", "b1", "c1", "d1", "e1"));
+        Assert.True(slice45.Contains("b1", "c1", "d1", "e1"));
+
+        var table4 = new IndexedTable<string, string, string, string, int>();
+        table4["a1", "b1", "c1", "d1"] = 1;
+        table4["a1", "b2", "c1", "d2"] = 2;
+        table4["a1", "b3", "c2", "d1"] = 3;
+        table4["a2", "b1", "c2", "d2"] = 4;
+        table4["a2", "b2", "c3", "d1"] = 5;
+        table4["a2", "b3", "c3", "d2"] = 6;
+
+        Assert.Equal(6, table4.Count);
+        var slice34 = table4.Slice1("a1");
+        slice34.Clear();
+        Assert.Equal(3, table4.Count);
+        Assert.Equal(0, slice34.Count);
+        slice34["b1", "c1", "d1"] = 1;
+        Assert.Equal(4, table4.Count);
+        Assert.True(table4.Contains("a1", "b1", "c1", "d1"));
+        Assert.Equal(1, slice34.Count);
+        Assert.True(slice34.Contains("b1", "c1", "d1"));
+        table4.Clear();
+        Assert.Equal(0, table4.Count);
+        Assert.Equal(0, slice34.Count);
+        table4["a1", "b1", "c1", "d1"] = 1;
+        Assert.Equal(1, table4.Count);
+        Assert.Equal(1, slice34.Count);
+        Assert.True(table4.Contains("a1", "b1", "c1", "d1"));
+        Assert.True(slice34.Contains("b1", "c1", "d1"));
+
+        var table3 = new IndexedTable<string, string, string, int>();
+        table3["a1", "b1", "c1"] = 1;
+        table3["a1", "b2", "c2"] = 2;
+        table3["a1", "b3", "c3"] = 3;
+        table3["a2", "b1", "c1"] = 4;
+        table3["a2", "b2", "c2"] = 5;
+        table3["a2", "b3", "c3"] = 6;
+
+        Assert.Equal(6, table3.Count);
+        var slice23 = table3.Slice1("a1");
+        slice23.Clear();
+        Assert.Equal(3, table3.Count);
+        Assert.Equal(0, slice23.Count);
+        slice23["b1", "c1"] = 1;
+        Assert.Equal(4, table3.Count);
+        Assert.True(table3.Contains("a1", "b1", "c1"));
+        Assert.Equal(1, slice23.Count);
+        Assert.True(slice23.Contains("b1", "c1"));
+        table3.Clear();
+        Assert.Equal(0, table3.Count);
+        Assert.Equal(0, slice23.Count);
+        table3["a1", "b1", "c1"] = 1;
+        Assert.Equal(1, table3.Count);
+        Assert.Equal(1, slice23.Count);
+        Assert.True(table3.Contains("a1", "b1", "c1"));
+        Assert.True(slice23.Contains("b1", "c1"));
+
+        var table2 = new IndexedTable<string, string, int>();
+        table2["a1", "b1"] = 1;
+        table2["a1", "b2"] = 2;
+        table2["a1", "b3"] = 3;
+        table2["a2", "b1"] = 4;
+        table2["a2", "b2"] = 5;
+        table2["a2", "b3"] = 6;
+
+        Assert.Equal(6, table2.Count);
+        var slice12 = table2.Slice1("a1");
+        slice12.Clear();
+        Assert.Equal(3, table2.Count);
+        Assert.Equal(0, slice12.Count);
+        slice12["b1"] = 1;
+        Assert.Equal(4, table2.Count);
+        Assert.True(table2.Contains("a1", "b1"));
+        Assert.Equal(1, slice12.Count);
+        Assert.True(slice12.Contains("b1"));
+        table2.Clear();
+        Assert.Equal(0, table2.Count);
+        Assert.Equal(0, slice12.Count);
+        table2["a1", "b1"] = 1;
+        Assert.Equal(1, table2.Count);
+        Assert.Equal(1, slice12.Count);
+        Assert.True(table2.Contains("a1", "b1"));
+        Assert.True(slice12.Contains("b1"));
+
+        var table1 = new IndexedTable<string, int>();
+        table1["a1"] = 1;
+        table1["a2"] = 2;
+        table1["a3"] = 3;
+        table1["a4"] = 4;
+        table1["a5"] = 5;
+        table1["a6"] = 6;
+
+        Assert.Equal(6, table1.Count);
+        table1.Clear();
+        Assert.Equal(0, table1.Count);
+        table1["a1"] = 1;
+        Assert.Equal(1, table1.Count);
+        Assert.True(table1.Contains("a1"));
+    }
 }

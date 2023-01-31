@@ -113,6 +113,44 @@ namespace TableCollections
             return true;
         }
 
+        public void Clear()
+        {
+            var collapsed = GetCollapsedIndexsetOrDefault();
+            if (collapsed == null)
+            {
+                _data.Clear();
+                _unusedIndices.Clear();
+                foreach (var indices in _indices)
+                {
+                    foreach (var ind in indices.Values)
+                    {
+                        ind.Clear();
+                    }
+                }
+                foreach (var indices in _collapsedKeys)
+                {
+                    indices.Clear();
+                }
+            }
+            else
+            {
+                foreach (var indices in _indices)
+                {
+                    foreach (var ind in indices.Values)
+                    {
+                        ind.ExceptWith(collapsed);
+                    }
+                }
+                foreach (var indices in _collapsedKeys)
+                {
+                    indices.ExceptWith(collapsed);
+                }
+                // declare the indices unused and then compact
+                _unusedIndices.UnionWith(collapsed);
+                Compact();
+            }
+        }
+
         protected void CheckCompact()
         {
             if (_unusedIndices.Count > CompactingAbsoluteThreshold
@@ -204,7 +242,7 @@ namespace TableCollections
         }
         
 #if NET472 || NET481
-        public ISet<int> GetCollapsedIndexsetOrDefault()
+        protected ISet<int> GetCollapsedIndexsetOrDefault()
         {
             HashSet<int> collapsedIndices = null;
             if (_collapsedKeys.Count > 0)
@@ -216,7 +254,7 @@ namespace TableCollections
             return collapsedIndices;
         }
 #else
-        public ISet<int>? GetCollapsedIndexsetOrDefault()
+        protected ISet<int>? GetCollapsedIndexsetOrDefault()
         {
             HashSet<int>? collapsedIndices = null;
             if (_collapsedKeys.Count > 0)
@@ -228,7 +266,7 @@ namespace TableCollections
             return collapsedIndices;
         }
 #endif
-        
+
         public IEnumerable<TValue> EnumerateValues()
         {
             var collapsedIndices = GetCollapsedIndexsetOrDefault();
