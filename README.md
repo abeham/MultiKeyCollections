@@ -1,6 +1,6 @@
 # MultiKeyCollections
 
-This library adds the `MultiKeyCollections<TKey1, TKey2, ..., TValue>` class with up to 5 keys.
+This library adds the `MultiKeyDictionary<TKey1, TKey2, ..., TValue>` class with up to 5 keys.
 
 This class is similar to a `Dictionary<TKey, TValue>` but with multiple keys. However, it is more complex than a `Dictionary<(T1, T2), TValue>` which cannot be queried for just one key. MultiKeyDictionaries allow to be sliced, e.g., `dict.Slice1(key1)` or `dict.Slice2(key2)`, which returns a lower dimensional representation, i.e., a `MultiKeyDictionary` with one less generic key type. This lower dimensional representation still supports data manipulation which will affect the higher dimensional representation as well. That means any slice shares the data with any other and with the full representation.
 
@@ -16,7 +16,7 @@ The class is not thread-safe.
 
 ```csharp
 // in this example, three keys are defined (int, string, string) and the value is an int.
-var dict = new MultiKeyCollections<int, string, string, int>();
+var dict = new MultiKeyDictionary<int, string, string, int>();
 dict.Add(1, "a", "x", 100);
 dict.Add(1, "a", "y", 200);
 dict.Add(1, "b", "x", 300);
