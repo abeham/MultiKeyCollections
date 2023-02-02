@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Xunit;
 
-namespace TableCollections.Tests;
+namespace MultiKeyCollections.Tests;
 
 public class ContainsTests
 {

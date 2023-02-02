@@ -2,16 +2,94 @@
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
+using System.Diagnostics.CodeAnalysis;
 
-namespace TableCollections
+namespace MultiKeyCollections
 {
-    public class MultiKeyDictionary<TValue> : IEnumerable<TValue>
+    public struct ArrayTuple
     {
-        protected IList<IDictionary<object, ISet<int>>> _indices;
-        protected IList<TValue> _data;
-        protected IList<ISet<int>> _collapsedKeys;
-        protected ISet<int>_unusedIndices;
+        private object[] _array;
+
+        public static ArrayTuple From(IList<(object, ISet<int>, int)> collapsedKeys, params object[] keys)
+        {
+            var array = new object[collapsedKeys.Count + keys.Length];
+            for (var i = collapsedKeys.Count - 1; i >= 0; i--)
+            {
+                for (var j = array.Length - 1; j > collapsedKeys[i].Item3; j--)
+                {
+                    array[j] = array[j - 1];
+                }
+                array[collapsedKeys[i].Item3] = collapsedKeys[i].Item1;
+            }
+            for (int i = 0, j = 0; i < array.Length; i++)
+            {
+                if (array[i] == null)
+                    array[i] = keys[j++];
+            }
+            return new ArrayTuple()
+            {
+                _array = array
+            };
+        }
+        public static ArrayTuple From(params object[] keys)
+        {
+            return new ArrayTuple()
+            {
+                _array = keys
+            };
+        }
+
+#if (NET472 || NET481)
+        public override bool Equals(object obj)
+#else
+        public override bool Equals([NotNullWhen(true)] object? obj)
+#endif
+        {
+            if (ReferenceEquals(this, obj)) return true;
+            if (obj == null) return false;
+            if (!(obj is ArrayTuple tup)) return false;
+            if (_array.Length != tup._array.Length) return false;
+            return _array.SequenceEqual(tup._array);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                var hash = _array[0].GetHashCode();
+                for (var i = 1; i < _array.Length; i++)
+                {
+                    hash = hash * 23 + _array[i].GetHashCode();
+                }
+                return hash;
+            }
+        }
+    }
+
+    public class MultiKeyDictionary<T1, T2, T3, T4, T5, TValue> : IEnumerable<TValue>
+#if !(NET472 || NET481)
+        where T1 : notnull
+        where T2 : notnull
+        where T3 : notnull
+        where T4 : notnull
+        where T5 : notnull
+#endif
+    {
+        private IDictionary<T1, ISet<int>> _indices1;
+        private IDictionary<T2, ISet<int>> _indices2;
+        private IDictionary<T3, ISet<int>> _indices3;
+        private IDictionary<T4, ISet<int>> _indices4;
+        private IDictionary<T5, ISet<int>> _indices5;
+        private IDictionary<ArrayTuple, int> _fullIndex;
+        private IList<TValue> _data;
+        private IList<T1> _keys1;
+        private IList<T2> _keys2;
+        private IList<T3> _keys3;
+        private IList<T4> _keys4;
+        private IList<T5> _keys5;
+        private IList<(object, ISet<int>, int)> _collapsedKeys;
+        private ISet<int> _unusedIndices;
+        
         /// <summary>
         /// Removals do not actually remove data from the table, but just delete the index.
         /// If a lot of Remove operations are performed, the table will become very sparsely populated with actual data.
@@ -27,23 +105,94 @@ namespace TableCollections
         /// Both this and the absolute threshold must be met for a compaction to occur.
         /// </summary>
         /// <value>The relative number of unused indices (relative to the full size of the array) before a compaction is performed.</value>
-        public double CompactingRelativeThreshold { get; set; } = 0.5;
+        public double CompactingRelativeThreshold { get; set; } = 0.01;
 
-        protected MultiKeyDictionary()
-        {
-            _indices = new List<IDictionary<object, ISet<int>>>();
-            _data = new List<TValue>();
-            _collapsedKeys = new List<ISet<int>>();
-            _unusedIndices = new HashSet<int>();
-        }
 
-        protected internal MultiKeyDictionary(IList<IDictionary<object, ISet<int>>> indices,
-            IList<TValue> data, IList<ISet<int>> collapsedKeys, ISet<int> unusedIndices)
+        protected internal MultiKeyDictionary(IDictionary<T1, ISet<int>> indices1,
+            IDictionary<T2, ISet<int>> indices2, IDictionary<T3, ISet<int>> indices3,
+            IDictionary<T4, ISet<int>> indices4, IDictionary<T5, ISet<int>> indices5,
+            IDictionary<ArrayTuple, int> fullIndex, IList<TValue> data,
+            IList<T1> keys1, IList<T2> keys2, IList<T3> keys3, IList<T4> keys4, IList<T5> keys5,
+            IList<(object, ISet<int>, int)> collapsedKeys, ISet<int> unusedIndices)
         {
-            _indices = indices;
+            _indices1 = indices1;
+            _indices2 = indices2;
+            _indices3 = indices3;
+            _indices4 = indices4;
+            _indices5 = indices5;
+            _fullIndex = fullIndex;
             _data = data;
+            _keys1 = keys1;
+            _keys2 = keys2;
+            _keys3 = keys3;
+            _keys4 = keys4;
+            _keys5 = keys5;
             _collapsedKeys = collapsedKeys;
             _unusedIndices = unusedIndices;
+        }
+        public MultiKeyDictionary() : this(new KeyValuePair<(T1, T2, T3, T4, T5), TValue>[0]) { }
+        public MultiKeyDictionary(IEnumerable<KeyValuePair<(T1, T2, T3, T4, T5), TValue>> data)
+            : this(data.Select(x => (x.Key.Item1, x.Key.Item2, x.Key.Item3, x.Key.Item4, x.Key.Item5, x.Value))) { }
+        public MultiKeyDictionary(IEnumerable<(T1, T2, T3, T4, T5, TValue)> data)
+        {
+            _indices1 = new Dictionary<T1, ISet<int>>();
+            _indices2 = new Dictionary<T2, ISet<int>>();
+            _indices3 = new Dictionary<T3, ISet<int>>();
+            _indices4 = new Dictionary<T4, ISet<int>>();
+            _indices5 = new Dictionary<T5, ISet<int>>();
+            _fullIndex = new Dictionary<ArrayTuple, int>(100);
+            _data = new List<TValue>(100);
+            _keys1 = new List<T1>(100);
+            _keys2 = new List<T2>(100);
+            _keys3 = new List<T3>(100);
+            _keys4 = new List<T4>(100);
+            _keys5 = new List<T5>(100);
+            _collapsedKeys = new List<(object, ISet<int>, int)>();
+            _unusedIndices = new HashSet<int>();
+
+            var idx = -1;
+            foreach (var d in data)
+            {
+                ++idx;
+                var (key1, key2, key3, key4, key5, val) = d;
+                _data.Add(val);
+                _fullIndex[ArrayTuple.From(key1, key2, key3, key4, key5)] = idx;
+                _keys1.Add(key1);
+                _keys2.Add(key2);
+                _keys3.Add(key3);
+                _keys4.Add(key4);
+                _keys5.Add(key5);
+                if (!_indices1.TryGetValue(key1, out var ind1))
+                {
+                    ind1 = new HashSet<int>();
+                    _indices1[key1] = ind1;
+                }
+                ind1.Add(idx);
+                if (!_indices2.TryGetValue(key2, out var ind2))
+                {
+                    ind2 = new HashSet<int>();
+                    _indices2[key2] = ind2;
+                }
+                ind2.Add(idx);
+                if (!_indices3.TryGetValue(key3, out var ind3))
+                {
+                    ind3 = new HashSet<int>();
+                    _indices3[key3] = ind3;
+                }
+                ind3.Add(idx);
+                if (!_indices4.TryGetValue(key4, out var ind4))
+                {
+                    ind4 = new HashSet<int>();
+                    _indices4[key4] = ind4;
+                }
+                ind4.Add(idx);
+                if (!_indices5.TryGetValue(key5, out var ind5))
+                {
+                    ind5 = new HashSet<int>();
+                    _indices5[key5] = ind5;
+                }
+                ind5.Add(idx);
+            }
         }
 
         public int Count => GetCollapsedIndexsetOrDefault()?.Count ?? (_data.Count - _unusedIndices.Count);
@@ -54,13 +203,13 @@ namespace TableCollections
         /// <param name="value"></param>
         public void Set(TValue value)
         {
-            // This method also overrides unused indices *shrug*
             var collapsedIndices = GetCollapsedIndexsetOrDefault();
             if (collapsedIndices == null)
             {
                 // set all values
                 for (var i = 0; i < _data.Count; i++)
                 {
+                    // This method also overrides unused indices *shrug*
                     _data[i] = value;
                 }
             }
@@ -72,43 +221,36 @@ namespace TableCollections
             }
         }
 
-        public bool Remove(params object[] keys)
+        public bool Remove(T1 key1, T2 key2, T3 key3, T4 key4, T5 key5)
         {
-            ExceptionHandling.ThrowIfNull(keys, nameof(keys));
-            if (keys.Length != _indices.Count)
-                throw new ArgumentException($"Expected {nameof(keys)} to have {_indices.Count} elements");
-
-            var indices = GetCollapsedIndexsetOrDefault();
-
-            for (var i = 0; i < keys.Length; i++)
+            ExceptionHandling.ThrowIfNull(key1, nameof(key1));
+            ExceptionHandling.ThrowIfNull(key2, nameof(key2));
+            ExceptionHandling.ThrowIfNull(key3, nameof(key3));
+            ExceptionHandling.ThrowIfNull(key4, nameof(key4));
+            ExceptionHandling.ThrowIfNull(key5, nameof(key5));
+            
+            var key = ArrayTuple.From(_collapsedKeys, key1, key2, key3, key4, key5);
+            if (!_fullIndex.TryGetValue(key, out var index))
             {
-                if (!_indices[i].TryGetValue(keys[i], out var ind) || ind.Count == 0)
-                    return false;
-                if (indices == null)
-                {
-                    indices = new HashSet<int>(ind);
-                }
-                else
-                {
-                    indices.IntersectWith(ind);
-                }
-                if (indices.Count == 0) return false;
+                return false;
             }
-
-            var index = indices.Single();
-            _data[index] = default; // don't remove, just set to default
+            _fullIndex.Remove(key);
             _unusedIndices.Add(index);
+            _data[index] = default;
+            _keys1[index] = default;
+            _keys2[index] = default;
+            _keys3[index] = default;
+            _keys4[index] = default;
+            _keys5[index] = default;
             for (var i = 0; i < _collapsedKeys.Count; i++)
             {
-                _collapsedKeys[i].Remove(index); // we don't need to manipulate all indices > index, because we don't remove above
+                _collapsedKeys[i].Item2.Remove(index); // we don't need to manipulate all indices > index, because we don't remove above
             }
-            for (var i = 0; i < _indices.Count; i++)
-            {
-                foreach (var ind in _indices[i].Values)
-                {
-                    ind.Remove(index); // we don't need to manipulate all indices > index, because we don't remove above
-                }
-            }
+            _indices1[key1].Remove(index);
+            _indices2[key2].Remove(index);
+            _indices3[key3].Remove(index);
+            _indices4[key4].Remove(index);
+            _indices5[key5].Remove(index);
             CheckCompact();
             return true;
         }
@@ -118,32 +260,69 @@ namespace TableCollections
             var collapsed = GetCollapsedIndexsetOrDefault();
             if (collapsed == null)
             {
+                _fullIndex.Clear();
                 _data.Clear();
+                _keys1.Clear();
+                _keys2.Clear();
+                _keys3.Clear();
+                _keys4.Clear();
+                _keys5.Clear();
                 _unusedIndices.Clear();
-                foreach (var indices in _indices)
+                foreach (var indices in _indices1.Values)
                 {
-                    foreach (var ind in indices.Values)
-                    {
-                        ind.Clear();
-                    }
+                    indices.Clear();
+                }
+                foreach (var indices in _indices2.Values)
+                {
+                    indices.Clear();
+                }
+                foreach (var indices in _indices3.Values)
+                {
+                    indices.Clear();
+                }
+                foreach (var indices in _indices4.Values)
+                {
+                    indices.Clear();
+                }
+                foreach (var indices in _indices5.Values)
+                {
+                    indices.Clear();
                 }
                 foreach (var indices in _collapsedKeys)
                 {
-                    indices.Clear();
+                    indices.Item2.Clear();
                 }
             }
             else
             {
-                foreach (var indices in _indices)
+                foreach (var ind in collapsed)
                 {
-                    foreach (var ind in indices.Values)
-                    {
-                        ind.ExceptWith(collapsed);
-                    }
+                    var key = ArrayTuple.From(_collapsedKeys, _keys1[ind], _keys2[ind], _keys3[ind], _keys4[ind], _keys5[ind]);
+                    _fullIndex.Remove(key);
+                }
+                foreach (var indices in _indices1.Values)
+                {
+                    indices.ExceptWith(collapsed);
+                }
+                foreach (var indices in _indices2.Values)
+                {
+                    indices.ExceptWith(collapsed);
+                }
+                foreach (var indices in _indices3.Values)
+                {
+                    indices.ExceptWith(collapsed);
+                }
+                foreach (var indices in _indices4.Values)
+                {
+                    indices.ExceptWith(collapsed);
+                }
+                foreach (var indices in _indices5.Values)
+                {
+                    indices.ExceptWith(collapsed);
                 }
                 foreach (var indices in _collapsedKeys)
                 {
-                    indices.ExceptWith(collapsed);
+                    indices.Item2.ExceptWith(collapsed);
                 }
                 // declare the indices unused and then compact
                 _unusedIndices.UnionWith(collapsed);
@@ -178,13 +357,37 @@ namespace TableCollections
                 offsetIndex = index;
                 offset++;
                 _data.RemoveAt(sequence[sequence.Count - 1 - i]);
+                _keys1.RemoveAt(sequence[sequence.Count - 1 - i]);
+                _keys2.RemoveAt(sequence[sequence.Count - 1 - i]);
+                _keys3.RemoveAt(sequence[sequence.Count - 1 - i]);
+                _keys4.RemoveAt(sequence[sequence.Count - 1 - i]);
+                _keys5.RemoveAt(sequence[sequence.Count - 1 - i]);
             }
             for (var o = offsetIndex; o < _data.Count + offset; o++)
             {
                 offsets[o] = offset;
             }
+            foreach (var kvp in _fullIndex.ToArray())
+            {
+                if (offsets.TryGetValue(kvp.Value, out var off))
+                {
+                    _fullIndex[kvp.Key] = kvp.Value - off;
+                }
+            }
             foreach (var indices in _collapsedKeys)
             {
+                indices.Item2.ExceptWith(_unusedIndices);
+                var reindex = indices.Item2.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
+                {
+                    indices.Item2.ExceptWith(reindex.Select(x => x.index));
+                    indices.Item2.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            foreach (var kvp in _indices1)
+            {
+                var key = kvp.Key;
+                var indices = kvp.Value;
                 indices.ExceptWith(_unusedIndices);
                 var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
                 if (reindex.Count > 0)
@@ -193,85 +396,101 @@ namespace TableCollections
                     indices.UnionWith(reindex.Select(x => x.index - x.offset));
                 }
             }
-            foreach (var dict in _indices)
+            foreach (var kvp in _indices2)
             {
-#if NET472 || NET481
-                foreach (var kvp in dict)
+                var key = kvp.Key;
+                var indices = kvp.Value;
+                indices.ExceptWith(_unusedIndices);
+                var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
                 {
-                    var key = kvp.Key;
-                    var indices = kvp.Value;
-#else
-                foreach (var (key, indices) in dict)
+                    indices.ExceptWith(reindex.Select(x => x.index));
+                    indices.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            foreach (var kvp in _indices3)
+            {
+                var key = kvp.Key;
+                var indices = kvp.Value;
+                indices.ExceptWith(_unusedIndices);
+                var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
                 {
-#endif
-                    indices.ExceptWith(_unusedIndices);
-                    var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
-                    if (reindex.Count > 0)
-                    {
-                        indices.ExceptWith(reindex.Select(x => x.index));
-                        indices.UnionWith(reindex.Select(x => x.index - x.offset));
-                    }
+                    indices.ExceptWith(reindex.Select(x => x.index));
+                    indices.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            foreach (var kvp in _indices4)
+            {
+                var key = kvp.Key;
+                var indices = kvp.Value;
+                indices.ExceptWith(_unusedIndices);
+                var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
+                {
+                    indices.ExceptWith(reindex.Select(x => x.index));
+                    indices.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            foreach (var kvp in _indices5)
+            {
+                var key = kvp.Key;
+                var indices = kvp.Value;
+                indices.ExceptWith(_unusedIndices);
+                var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
+                {
+                    indices.ExceptWith(reindex.Select(x => x.index));
+                    indices.UnionWith(reindex.Select(x => x.index - x.offset));
                 }
             }
             _unusedIndices.Clear();
         }
 
-        public bool Contains(params object[] keys)
+        public bool Contains(T1 key1, T2 key2, T3 key3, T4 key4, T5 key5)
         {
-            ExceptionHandling.ThrowIfNull(keys, nameof(keys));
-            if (keys.Length != _indices.Count)
-                throw new ArgumentException($"Expected {nameof(keys)} to have {_indices.Count} elements");
-
-            var indices = GetCollapsedIndexsetOrDefault();
-
-            for (var i = 0; i < keys.Length; i++)
-            {
-                if (!_indices[i].TryGetValue(keys[i], out var ind) || ind.Count == 0)
-                    return false;
-                if (indices == null)
-                {
-                    indices = new HashSet<int>(ind);
-                }
-                else
-                {
-                    indices.IntersectWith(ind);
-                }
-                if (indices.Count == 0) return false;
-            }
-            return true;
+            return _fullIndex.ContainsKey(ArrayTuple.From(_collapsedKeys, key1, key2, key3, key4, key5));
         }
-        
+
 #if NET472 || NET481
         protected ISet<int> GetCollapsedIndexsetOrDefault()
         {
             HashSet<int> collapsedIndices = null;
-            if (_collapsedKeys.Count > 0)
-            {
-                collapsedIndices = new HashSet<int>(_collapsedKeys.First());
-                foreach (var collapsedSet in _collapsedKeys.Skip(1))
-                    collapsedIndices.IntersectWith(collapsedSet);
-            }
-            return collapsedIndices;
-        }
 #else
         protected ISet<int>? GetCollapsedIndexsetOrDefault()
         {
             HashSet<int>? collapsedIndices = null;
+#endif
             if (_collapsedKeys.Count > 0)
             {
-                collapsedIndices = new HashSet<int>(_collapsedKeys.First());
-                foreach (var collapsedSet in _collapsedKeys.Skip(1))
-                    collapsedIndices.IntersectWith(collapsedSet);
+                foreach (var collapsedSet in _collapsedKeys.Select(x => x.Item2).OrderBy(x => x.Count))
+                {
+                    if (collapsedIndices == null)
+                        collapsedIndices = new HashSet<int>(collapsedSet);
+                    else collapsedIndices.IntersectWith(collapsedSet);
+                }
             }
             return collapsedIndices;
         }
-#endif
 
         public IEnumerable<TValue> EnumerateValues()
         {
             var collapsedIndices = GetCollapsedIndexsetOrDefault();
-            if (collapsedIndices == null) return _data;
-            return collapsedIndices.Select(f => _data[f]);
+            if (collapsedIndices == null)
+            {
+                for (var i = 0; i < _data.Count; i++)
+                {
+                    if (!_unusedIndices.Contains(i))
+                        yield return _data[i];
+                }
+            }
+            else
+            {
+                foreach (var index in collapsedIndices)
+                {
+                    yield return _data[index];
+                }
+            }
         }
 
         IEnumerator<TValue> IEnumerable<TValue>.GetEnumerator()
@@ -283,62 +502,6 @@ namespace TableCollections
         {
             return EnumerateValues().GetEnumerator();
         }
-    }
-
-    public class MultiKeyDictionary<T1, T2, T3, T4, T5, TValue> : MultiKeyDictionary<TValue>
-#if !(NET472 || NET481)
-        where T1 : notnull
-        where T2 : notnull
-        where T3 : notnull
-        where T4 : notnull
-        where T5 : notnull
-#endif
-    {
-        protected internal MultiKeyDictionary(IList<IDictionary<object, ISet<int>>> indices,
-            IList<TValue> data, IList<ISet<int>> collapsedKeys, ISet<int> unusedIndices) : base(indices, data, collapsedKeys, unusedIndices) { }
-        public MultiKeyDictionary() : this(new KeyValuePair<(T1, T2, T3, T4, T5), TValue>[0]) { }
-        public MultiKeyDictionary(IEnumerable<KeyValuePair<(T1, T2, T3, T4, T5), TValue>> data)
-        {
-            for (var i = 0; i < 5; i++)
-                _indices.Add(new Dictionary<object, ISet<int>>());
-
-            var idx = -1;
-            foreach (var d in data)
-            {
-                _data.Insert(++idx, d.Value);
-                var key = (ITuple)d.Key;
-                for (var i = 0; i < key.Length; i++)
-                {
-                    if (!_indices[i].TryGetValue(key[i], out var ind))
-                    {
-                        ind = new HashSet<int>();
-                        _indices[i][key[i]] = ind;
-                    }
-                    ind.Add(idx);
-                }
-            }
-        }
-        public MultiKeyDictionary(IEnumerable<(T1, T2, T3, T4, T5, TValue)> data)
-        {
-            for (var i = 0; i < 5; i++)
-                _indices.Add(new Dictionary<object, ISet<int>>());
-
-            var idx = -1;
-            foreach (var d in data)
-            {
-                _data.Insert(++idx, d.Item6);
-                var key = (ITuple)d;
-                for (var i = 0; i < key.Length - 1; i++)
-                {
-                    if (!_indices[i].TryGetValue(key[i], out var ind))
-                    {
-                        ind = new HashSet<int>();
-                        _indices[i][key[i]] = ind;
-                    }
-                    ind.Add(idx);
-                }
-            }
-        }
 
         public TValue this[T1 key1, T2 key2, T3 key3, T4 key4, T5 key5]
         {
@@ -349,31 +512,11 @@ namespace TableCollections
                 ExceptionHandling.ThrowIfNull(key3, nameof(key3));
                 ExceptionHandling.ThrowIfNull(key4, nameof(key4));
                 ExceptionHandling.ThrowIfNull(key5, nameof(key5));
-                if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
-                    throw new ArgumentException($"Key not found {key1}");
-                if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
-                    throw new ArgumentException($"Key not found {key2}");
-                if (!_indices[2].TryGetValue(key3, out var indices3) || indices3.Count == 0)
-                    throw new ArgumentException($"Key not found {key3}");
-                if (!_indices[3].TryGetValue(key4, out var indices4) || indices4.Count == 0)
-                    throw new ArgumentException($"Key not found {key4}");
-                if (!_indices[4].TryGetValue(key5, out var indices5) || indices5.Count == 0)
-                    throw new ArgumentException($"Key not found {key5}");
-                var index = -1;
-                var indices = GetCollapsedIndexsetOrDefault();
-                if (indices != null)
+                if (!_fullIndex.TryGetValue(ArrayTuple.From(_collapsedKeys, key1, key2, key3, key4, key5), out var index))
                 {
-                    indices.IntersectWith(indices1);
-                    indices.IntersectWith(indices2);
-                    indices.IntersectWith(indices3);
-                    indices.IntersectWith(indices4);
-                    indices.IntersectWith(indices5);
-                    index = indices.Single();
+                    throw new ArgumentException($"Key combination {(key1, key2, key3, key4, key5)} not found");
                 }
-                else
-                {
-                    index = indices1.Intersect(indices2).Intersect(indices3).Intersect(indices4).Intersect(indices5).Single();
-                }
+
                 return _data[index];
             }
             set
@@ -383,64 +526,70 @@ namespace TableCollections
                 ExceptionHandling.ThrowIfNull(key3, nameof(key3));
                 ExceptionHandling.ThrowIfNull(key4, nameof(key4));
                 ExceptionHandling.ThrowIfNull(key5, nameof(key5));
-                var tuple = (ITuple)(key1, key2, key3, key4, key5);
-                var index = -1;
-                var indices = GetCollapsedIndexsetOrDefault();
-                if (indices != null)
-                {
-                    for (var i = 0; i < tuple.Length; i++)
-                    {
-                        if (!_indices[i].TryGetValue(tuple[i], out var ind))
-                        {
-                            ind = new HashSet<int>();
-                            _indices[i][tuple[i]] = ind;
-                        }
-                        indices.IntersectWith(ind);
-                    }
-                    if (indices.Count > 0)
-                        index = indices.Single();
-                }
-                else
-                {
-                    IEnumerable<int> filtered = null;
-                    for (var i = 0; i < tuple.Length; i++)
-                    {
-                        if (!_indices[i].TryGetValue(tuple[i], out var ind))
-                        {
-                            ind = new HashSet<int>();
-                            _indices[i][tuple[i]] = ind;
-                        }
-                        filtered = filtered == null ? ind : filtered.Intersect(ind);
-                    }
-                    foreach (var i in filtered ?? Enumerable.Empty<int>())
-                    {
-                        if (index != -1) throw new InvalidOperationException(); // Single() for non-negative enumerable
-                        index = i;
-                    }
-                }
+                
+                var tupKey = ArrayTuple.From(_collapsedKeys, key1, key2, key3, key4, key5);
+                if (!_fullIndex.TryGetValue(tupKey, out var index))
+                    index = -1;
                 if (index < 0)
                 {
+                    if (!_indices1.TryGetValue(key1, out var indices1))
+                    {
+                        indices1 = new HashSet<int>();
+                        _indices1[key1] = indices1;
+                    }
+                    if (!_indices2.TryGetValue(key2, out var indices2))
+                    {
+                        indices2 = new HashSet<int>();
+                        _indices2[key2] = indices2;
+                    }
+                    if (!_indices3.TryGetValue(key3, out var indices3))
+                    {
+                        indices3 = new HashSet<int>();
+                        _indices3[key3] = indices3;
+                    }
+                    if (!_indices4.TryGetValue(key4, out var indices4))
+                    {
+                        indices4 = new HashSet<int>();
+                        _indices4[key4] = indices4;
+                    }
+                    if (!_indices5.TryGetValue(key5, out var indices5))
+                    {
+                        indices5 = new HashSet<int>();
+                        _indices5[key5] = indices5;
+                    }
                     if (_unusedIndices.Count > 0)
                     {
                         // reuse an unused index
                         index = _unusedIndices.First();
                         _unusedIndices.Remove(index);
                         _data[index] = value;
+                        _keys1[index] = key1;
+                        _keys2[index] = key2;
+                        _keys3[index] = key3;
+                        _keys4[index] = key4;
+                        _keys5[index] = key5;
                     }
                     else
                     {
                         // make an insert at the end
                         index = _data.Count;
-                        _data.Insert(index, value);
+                        _data.Add(value);
+                        _keys1.Add(key1);
+                        _keys2.Add(key2);
+                        _keys3.Add(key3);
+                        _keys4.Add(key4);
+                        _keys5.Add(key5);
                     }
-                    for (var i = 0; i < tuple.Length; i++)
-                    {
-                        _indices[i][tuple[i]].Add(index);
-                    }
+                    _fullIndex[tupKey] = index;
+                    indices1.Add(index);
+                    indices2.Add(index);
+                    indices3.Add(index);
+                    indices4.Add(index);
+                    indices5.Add(index);
                     // the data needs to be added to all collapsed dimensions
                     foreach (var f in _collapsedKeys)
                     {
-                        f.Add(index);
+                        f.Item2.Add(index);
                     }
                 }
                 else
@@ -466,20 +615,32 @@ namespace TableCollections
 
         public int Remove1(T1 key1)
         {
-            if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
+            if (!_indices1.TryGetValue(key1, out var indices1) || indices1.Count == 0)
                 return 0;
+            foreach (var index in indices1)
+            {
+                var key = ArrayTuple.From(_collapsedKeys, _keys1[index], _keys2[index], _keys3[index], _keys4[index], _keys5[index]);
+                _fullIndex.Remove(key);
+            }
             foreach (var indices in _collapsedKeys)
+            {
+                indices.Item2.ExceptWith(indices1);
+            }
+            foreach (var indices in _indices2.Values)
             {
                 indices.ExceptWith(indices1);
             }
-            foreach (var dict in _indices)
+            foreach (var indices in _indices3.Values)
             {
-                foreach (var indices in dict.Values)
-                {
-                    if (indices == indices1)
-                        continue;
-                    indices.ExceptWith(indices1);
-                }
+                indices.ExceptWith(indices1);
+            }
+            foreach (var indices in _indices4.Values)
+            {
+                indices.ExceptWith(indices1);
+            }
+            foreach (var indices in _indices5.Values)
+            {
+                indices.ExceptWith(indices1);
             }
             var removed = indices1.Count;
             _unusedIndices.UnionWith(indices1);
@@ -490,20 +651,32 @@ namespace TableCollections
 
         public int Remove2(T2 key2)
         {
-            if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
+            if (!_indices2.TryGetValue(key2, out var indices2) || indices2.Count == 0)
                 return 0;
+            foreach (var index in indices2)
+            {
+                var key = ArrayTuple.From(_collapsedKeys, _keys1[index], _keys2[index], _keys3[index], _keys4[index], _keys5[index]);
+                _fullIndex.Remove(key);
+            }
             foreach (var indices in _collapsedKeys)
+            {
+                indices.Item2.ExceptWith(indices2);
+            }
+            foreach (var indices in _indices1.Values)
             {
                 indices.ExceptWith(indices2);
             }
-            foreach (var dict in _indices)
+            foreach (var indices in _indices3.Values)
             {
-                foreach (var indices in dict.Values)
-                {
-                    if (indices == indices2)
-                        continue;
-                    indices.ExceptWith(indices2);
-                }
+                indices.ExceptWith(indices2);
+            }
+            foreach (var indices in _indices4.Values)
+            {
+                indices.ExceptWith(indices2);
+            }
+            foreach (var indices in _indices5.Values)
+            {
+                indices.ExceptWith(indices2);
             }
             var removed = indices2.Count;
             _unusedIndices.UnionWith(indices2);
@@ -514,20 +687,32 @@ namespace TableCollections
 
         public int Remove3(T3 key3)
         {
-            if (!_indices[2].TryGetValue(key3, out var indices3) || indices3.Count == 0)
+            if (!_indices3.TryGetValue(key3, out var indices3) || indices3.Count == 0)
                 return 0;
+            foreach (var index in indices3)
+            {
+                var key = ArrayTuple.From(_collapsedKeys, _keys1[index], _keys2[index], _keys3[index], _keys4[index], _keys5[index]);
+                _fullIndex.Remove(key);
+            }
             foreach (var indices in _collapsedKeys)
+            {
+                indices.Item2.ExceptWith(indices3);
+            }
+            foreach (var indices in _indices1.Values)
             {
                 indices.ExceptWith(indices3);
             }
-            foreach (var dict in _indices)
+            foreach (var indices in _indices2.Values)
             {
-                foreach (var indices in dict.Values)
-                {
-                    if (indices == indices3)
-                        continue;
-                    indices.ExceptWith(indices3);
-                }
+                indices.ExceptWith(indices3);
+            }
+            foreach (var indices in _indices4.Values)
+            {
+                indices.ExceptWith(indices3);
+            }
+            foreach (var indices in _indices5.Values)
+            {
+                indices.ExceptWith(indices3);
             }
             var removed = indices3.Count;
             _unusedIndices.UnionWith(indices3);
@@ -538,20 +723,32 @@ namespace TableCollections
 
         public int Remove4(T4 key4)
         {
-            if (!_indices[3].TryGetValue(key4, out var indices4) || indices4.Count == 0)
+            if (!_indices4.TryGetValue(key4, out var indices4) || indices4.Count == 0)
                 return 0;
+            foreach (var index in indices4)
+            {
+                var key = ArrayTuple.From(_collapsedKeys, _keys1[index], _keys2[index], _keys3[index], _keys4[index], _keys5[index]);
+                _fullIndex.Remove(key);
+            }
             foreach (var indices in _collapsedKeys)
+            {
+                indices.Item2.ExceptWith(indices4);
+            }
+            foreach (var indices in _indices1.Values)
             {
                 indices.ExceptWith(indices4);
             }
-            foreach (var dict in _indices)
+            foreach (var indices in _indices2.Values)
             {
-                foreach (var indices in dict.Values)
-                {
-                    if (indices == indices4)
-                        continue;
-                    indices.ExceptWith(indices4);
-                }
+                indices.ExceptWith(indices4);
+            }
+            foreach (var indices in _indices3.Values)
+            {
+                indices.ExceptWith(indices4);
+            }
+            foreach (var indices in _indices5.Values)
+            {
+                indices.ExceptWith(indices4);
             }
             var removed = indices4.Count;
             _unusedIndices.UnionWith(indices4);
@@ -562,20 +759,32 @@ namespace TableCollections
 
         public int Remove5(T5 key5)
         {
-            if (!_indices[4].TryGetValue(key5, out var indices5) || indices5.Count == 0)
+            if (!_indices5.TryGetValue(key5, out var indices5) || indices5.Count == 0)
                 return 0;
+            foreach (var index in indices5)
+            {
+                var key = ArrayTuple.From(_collapsedKeys, _keys1[index], _keys2[index], _keys3[index], _keys4[index], _keys5[index]);
+                _fullIndex.Remove(key);
+            }
             foreach (var indices in _collapsedKeys)
+            {
+                indices.Item2.ExceptWith(indices5);
+            }
+            foreach (var indices in _indices1.Values)
             {
                 indices.ExceptWith(indices5);
             }
-            foreach (var dict in _indices)
+            foreach (var indices in _indices2.Values)
             {
-                foreach (var indices in dict.Values)
-                {
-                    if (indices == indices5)
-                        continue;
-                    indices.ExceptWith(indices5);
-                }
+                indices.ExceptWith(indices5);
+            }
+            foreach (var indices in _indices3.Values)
+            {
+                indices.ExceptWith(indices5);
+            }
+            foreach (var indices in _indices4.Values)
+            {
+                indices.ExceptWith(indices5);
             }
             var removed = indices5.Count;
             _unusedIndices.UnionWith(indices5);
@@ -590,94 +799,79 @@ namespace TableCollections
         public bool TryGetValue(T1 key1, T2 key2, T3 key3, T4 key4, T5 key5, out TValue? value)
 #endif
         {
-            value = default;
-            if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
+            if (!_fullIndex.TryGetValue(ArrayTuple.From(_collapsedKeys, key1, key2, key3, key4, key5), out var index))
+            {
+                value = default;
                 return false;
-            if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
-                return false;
-            if (!_indices[2].TryGetValue(key3, out var indices3) || indices3.Count == 0)
-                return false;
-            if (!_indices[3].TryGetValue(key4, out var indices4) || indices4.Count == 0)
-                return false;
-            if (!_indices[4].TryGetValue(key5, out var indices5) || indices5.Count == 0)
-                return false;
-
-            var indices = GetCollapsedIndexsetOrDefault();
-            if (indices == null) indices = new HashSet<int>(indices1);
-            else indices.IntersectWith(indices1);
-            indices.IntersectWith(indices2);
-            indices.IntersectWith(indices3);          
-            indices.IntersectWith(indices4);
-            indices.IntersectWith(indices5);
-            if (indices.Count != 1) return false;
-            value = _data[indices.Single()];
+            }
+            value = _data[index];
             return true;
         }
 
         public MultiKeyDictionary<T2, T3, T4, T5, TValue> Slice1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
-            {
-                throw new ArgumentException($"Key not found {key1}");
-            }
+            var ind = _indices1[key1];
+            if (ind.Count == 0) throw new ArgumentException($"key {key1} not found", nameof(key1));
             return new MultiKeyDictionary<T2, T3, T4, T5, TValue>(
-                new[] { _indices[1], _indices[2], _indices[3], _indices[4] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
+                _indices2, _indices3, _indices4, _indices5,
+                _fullIndex,
+                _data, _keys2, _keys3, _keys4, _keys5,
+                _collapsedKeys.Concat(new[] { ((object)key1, ind, 0) }).ToList(), _unusedIndices);
         }
 
         public MultiKeyDictionary<T1, T3, T4, T5, TValue> Slice2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
-            {
-                throw new ArgumentException($"Key not found {key2}");
-            }
+            var ind = _indices2[key2];
+            if (ind.Count == 0) throw new ArgumentException($"key {key2} not found", nameof(key2));
             return new MultiKeyDictionary<T1, T3, T4, T5, TValue>(
-                new[] { _indices[0], _indices[2], _indices[3], _indices[4] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
+                _indices1, _indices3, _indices4, _indices5,
+                _fullIndex,
+                _data, _keys1, _keys3, _keys4, _keys5,
+                _collapsedKeys.Concat(new[] { ((object)key2, ind, 1) }).ToList(), _unusedIndices);
         }
 
         public MultiKeyDictionary<T1, T2, T4, T5, TValue> Slice3(T3 key3)
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-            if (!_indices[2].TryGetValue(key3, out var ind) || ind.Count == 0)
-            {
-                throw new ArgumentException($"Key not found {key3}");
-            }
+            var ind = _indices3[key3];
+            if (ind.Count == 0) throw new ArgumentException($"key {key3} not found", nameof(key3));
             return new MultiKeyDictionary<T1, T2, T4, T5, TValue>(
-                new[] { _indices[0], _indices[1], _indices[3], _indices[4] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
+                _indices1, _indices2, _indices4, _indices5,
+                _fullIndex,
+                _data, _keys1, _keys2, _keys4, _keys5,
+                _collapsedKeys.Concat(new[] { ((object)key3, ind, 2) }).ToList(), _unusedIndices);
         }
 
         public MultiKeyDictionary<T1, T2, T3, T5, TValue> Slice4(T4 key4)
         {
             ExceptionHandling.ThrowIfNull(key4, nameof(key4));
-            if (!_indices[3].TryGetValue(key4, out var ind) || ind.Count == 0)
-            {
-                throw new ArgumentException($"Key not found {key4}");
-            }
+            var ind = _indices4[key4];
+            if (ind.Count == 0) throw new ArgumentException($"key {key4} not found", nameof(key4));
             return new MultiKeyDictionary<T1, T2, T3, T5, TValue>(
-                new[] { _indices[0], _indices[1], _indices[2], _indices[4] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
+                _indices1, _indices2, _indices3, _indices5,
+                _fullIndex,
+                _data, _keys1, _keys2, _keys3, _keys5,
+                _collapsedKeys.Concat(new[] { ((object)key4, ind, 3) }).ToList(), _unusedIndices);
         }
 
         public MultiKeyDictionary<T1, T2, T3, T4, TValue> Slice5(T5 key5)
         {
             ExceptionHandling.ThrowIfNull(key5, nameof(key5));
-            if (!_indices[4].TryGetValue(key5, out var ind) || ind.Count == 0)
-            {
-                throw new ArgumentException($"Key not found {key5}");
-            }
+            var ind = _indices5[key5];
+            if (ind.Count == 0) throw new ArgumentException($"key {key5} not found", nameof(key5));
             return new MultiKeyDictionary<T1, T2, T3, T4, TValue>(
-                new[] { _indices[0], _indices[1], _indices[2], _indices[3] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
+                _indices1, _indices2, _indices3, _indices4,
+                _fullIndex,
+                _data, _keys1, _keys2, _keys3, _keys4,
+                _collapsedKeys.Concat(new[] { ((object)key5, ind, 4) }).ToList(), _unusedIndices);
         }
 
         public bool ContainsKey1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
+            if (!_indices1.TryGetValue(key1, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -696,7 +890,7 @@ namespace TableCollections
         public bool ContainsKey2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
+            if (!_indices2.TryGetValue(key2, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -715,7 +909,7 @@ namespace TableCollections
         public bool ContainsKey3(T3 key3)
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-            if (!_indices[2].TryGetValue(key3, out var ind) || ind.Count == 0)
+            if (!_indices3.TryGetValue(key3, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -734,7 +928,7 @@ namespace TableCollections
         public bool ContainsKey4(T4 key4)
         {
             ExceptionHandling.ThrowIfNull(key4, nameof(key4));
-            if (!_indices[3].TryGetValue(key4, out var ind) || ind.Count == 0)
+            if (!_indices4.TryGetValue(key4, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -753,7 +947,7 @@ namespace TableCollections
         public bool ContainsKey5(T5 key5)
         {
             ExceptionHandling.ThrowIfNull(key5, nameof(key5));
-            if (!_indices[4].TryGetValue(key5, out var ind) || ind.Count == 0)
+            if (!_indices5.TryGetValue(key5, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -776,10 +970,9 @@ namespace TableCollections
 #endif
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (_indices[0].TryGetValue(key1, out var indices) && indices.Count > 0)
+            if (_indices1.TryGetValue(key1, out var indices) && indices.Count > 0)
             {
-                values = new MultiKeyDictionary<T2, T3, T4, T5, TValue>(new[] { _indices[1], _indices[2], _indices[3], _indices[4] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
+                values = Slice1(key1);
                 return true;
             }
             values = default;
@@ -793,10 +986,9 @@ namespace TableCollections
 #endif
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (_indices[1].TryGetValue(key2, out var indices) && indices.Count > 0)
+            if (_indices2.TryGetValue(key2, out var indices) && indices.Count > 0)
             {
-                values = new MultiKeyDictionary<T1, T3, T4, T5, TValue>(new[] { _indices[0], _indices[2], _indices[3], _indices[4] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
+                values = Slice2(key2);
                 return true;
             }
             values = default;
@@ -810,10 +1002,9 @@ namespace TableCollections
 #endif
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-            if (_indices[2].TryGetValue(key3, out var indices) && indices.Count > 0)
+            if (_indices3.TryGetValue(key3, out var indices) && indices.Count > 0)
             {
-                values = new MultiKeyDictionary<T1, T2, T4, T5, TValue>(new[] { _indices[0], _indices[1], _indices[3], _indices[4] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
+                values = Slice3(key3);
                 return true;
             }
             values = default;
@@ -827,10 +1018,9 @@ namespace TableCollections
 #endif
         {
             ExceptionHandling.ThrowIfNull(key4, nameof(key4));
-            if (_indices[3].TryGetValue(key4, out var indices) && indices.Count > 0)
+            if (_indices4.TryGetValue(key4, out var indices) && indices.Count > 0)
             {
-                values = new MultiKeyDictionary<T1, T2, T3, T5, TValue>(new[] { _indices[0], _indices[1], _indices[2], _indices[4] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
+                values = Slice4(key4);
                 return true;
             }
             values = default;
@@ -844,10 +1034,9 @@ namespace TableCollections
 #endif
         {
             ExceptionHandling.ThrowIfNull(key5, nameof(key5));
-            if (_indices[4].TryGetValue(key5, out var indices) && indices.Count > 0)
+            if (_indices5.TryGetValue(key5, out var indices) && indices.Count > 0)
             {
-                values = new MultiKeyDictionary<T1, T2, T3, T4, TValue>(new[] { _indices[0], _indices[1], _indices[2], _indices[3] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
+                values = Slice5(key5);
                 return true;
             }
             values = default;
@@ -857,51 +1046,27 @@ namespace TableCollections
         public IEnumerable<(T1, T2, T3, T4, T5, TValue)> Enumerate()
         {
             var collapsedIndices = GetCollapsedIndexsetOrDefault();
-            IEnumerable<(T1, int)> result1 = (collapsedIndices != null
-                ? _indices[0].Select(x => x.Value.Where(y => collapsedIndices.Contains(y)).Select(y => ((T1)x.Key, y))).SelectMany(x => x)
-                : _indices[0].Select(x => x.Value.Select(y => ((T1)x.Key, y))).SelectMany(x => x)).OrderBy(x => x.Item2);
-            IEnumerable<(T2, int)> result2 = (collapsedIndices != null
-                ? _indices[1].Select(x => x.Value.Where(y => collapsedIndices.Contains(y)).Select(y => ((T2)x.Key, y))).SelectMany(x => x)
-                : _indices[1].Select(x => x.Value.Select(y => ((T2)x.Key, y))).SelectMany(x => x)).OrderBy(x => x.Item2);
-            IEnumerable<(T3, int)> result3 = (collapsedIndices != null
-                ? _indices[2].Select(x => x.Value.Where(y => collapsedIndices.Contains(y)).Select(y => ((T3)x.Key, y))).SelectMany(x => x)
-                : _indices[2].Select(x => x.Value.Select(y => ((T3)x.Key, y))).SelectMany(x => x)).OrderBy(x => x.Item2);
-            IEnumerable<(T4, int)> result4 = (collapsedIndices != null
-                ? _indices[3].Select(x => x.Value.Where(y => collapsedIndices.Contains(y)).Select(y => ((T4)x.Key, y))).SelectMany(x => x)
-                : _indices[3].Select(x => x.Value.Select(y => ((T4)x.Key, y))).SelectMany(x => x)).OrderBy(x => x.Item2);
-            IEnumerable<(T5, int)> result5 = (collapsedIndices != null
-                ? _indices[4].Select(x => x.Value.Where(y => collapsedIndices.Contains(y)).Select(y => ((T5)x.Key, y))).SelectMany(x => x)
-                : _indices[4].Select(x => x.Value.Select(y => ((T5)x.Key, y))).SelectMany(x => x)).OrderBy(x => x.Item2);
-            var r1Iter = result1.GetEnumerator();
-            var r2Iter = result2.GetEnumerator();
-            var r3Iter = result3.GetEnumerator();
-            var r4Iter = result4.GetEnumerator();
-            var r5Iter = result5.GetEnumerator();
-            while (r1Iter.MoveNext())
+            if (collapsedIndices != null)
             {
-#if DEBUG
-                if (!r2Iter.MoveNext()) throw new InvalidOperationException();
-                if (r2Iter.Current.Item2 != r1Iter.Current.Item2) throw new InvalidOperationException();
-                if (!r3Iter.MoveNext()) throw new InvalidOperationException();
-                if (r3Iter.Current.Item2 != r1Iter.Current.Item2) throw new InvalidOperationException();
-                if (!r4Iter.MoveNext()) throw new InvalidOperationException();
-                if (r4Iter.Current.Item2 != r1Iter.Current.Item2) throw new InvalidOperationException();
-                if (!r5Iter.MoveNext()) throw new InvalidOperationException();
-                if (r5Iter.Current.Item2 != r1Iter.Current.Item2) throw new InvalidOperationException();
-#else
-                r2Iter.MoveNext();
-                r3Iter.MoveNext();
-                r4Iter.MoveNext();
-                r5Iter.MoveNext();
-#endif
-                yield return ((T1)r1Iter.Current.Item1, (T2)r2Iter.Current.Item1, (T3)r3Iter.Current.Item1, (T4)r4Iter.Current.Item1, (T5)r5Iter.Current.Item1, _data[r1Iter.Current.Item2]);
+                foreach (var i in collapsedIndices)
+                {
+                    yield return ((T1)_keys1[i], (T2)_keys2[i], (T3)_keys3[i], (T4)_keys4[i], (T5)_keys5[i], _data[i]);
+                }
+            }
+            else
+            {
+                for (var i = 0; i < _data.Count; i++)
+                {
+                    if (!_unusedIndices.Contains(i))
+                        yield return ((T1)_keys1[i], (T2)_keys2[i], (T3)_keys3[i], (T4)_keys4[i], (T5)_keys5[i], _data[i]);
+                }
             }
         }
 
         public Dictionary<(T1, T2, T3, T4, T5), TValue> ToDictionary() => Enumerate().ToDictionary(x => (x.Item1, x.Item2, x.Item3, x.Item4, x.Item5), x => x.Item6);
     }
 
-    public class MultiKeyDictionary<T1, T2, T3, T4, TValue> : MultiKeyDictionary<TValue>
+    public class MultiKeyDictionary<T1, T2, T3, T4, TValue> : IEnumerable<TValue>
 #if !(NET472 || NET481)
         where T1 : notnull
         where T2 : notnull
@@ -909,50 +1074,395 @@ namespace TableCollections
         where T4 : notnull
 #endif
     {
-        protected internal MultiKeyDictionary(IList<IDictionary<object, ISet<int>>> indices,
-            IList<TValue> data, IList<ISet<int>> collapsedKeys, ISet<int> unusedIndices) : base(indices, data, collapsedKeys, unusedIndices) { }
+        private const int KEYS = 4;
+        private IDictionary<T1, ISet<int>> _indices1;
+        private IDictionary<T2, ISet<int>> _indices2;
+        private IDictionary<T3, ISet<int>> _indices3;
+        private IDictionary<T4, ISet<int>> _indices4;
+        private IDictionary<ArrayTuple, int> _fullIndex;
+        private IList<TValue> _data;
+        private IList<T1> _keys1;
+        private IList<T2> _keys2;
+        private IList<T3> _keys3;
+        private IList<T4> _keys4;
+        private IList<(object, ISet<int>, int)> _collapsedKeys;
+        private ISet<int> _unusedIndices;
+
+        /// <summary>
+        /// Removals do not actually remove data from the table, but just delete the index.
+        /// If a lot of Remove operations are performed, the table will become very sparsely populated with actual data.
+        /// This setting controls the absolute number of unused indices that will trigger a compaction.
+        /// Both this and the relative threshold must be met for a compaction to occur.
+        /// </summary>
+        /// <value>The number of unused indices before a compaction is performed.</value>
+        public int CompactingAbsoluteThreshold { get; set; } = 1000;
+        /// <summary>
+        /// Removals do not actually remove data from the table, but just delete the index.
+        /// If a lot of Remove operations are performed, the table will become very sparsely populated with actual data.
+        /// This setting controls the relative number of unused indices that will trigger a compaction.
+        /// Both this and the absolute threshold must be met for a compaction to occur.
+        /// </summary>
+        /// <value>The relative number of unused indices (relative to the full size of the array) before a compaction is performed.</value>
+        public double CompactingRelativeThreshold { get; set; } = 0.01;
+
+
+        protected internal MultiKeyDictionary(IDictionary<T1, ISet<int>> indices1,
+            IDictionary<T2, ISet<int>> indices2, IDictionary<T3, ISet<int>> indices3,
+            IDictionary<T4, ISet<int>> indices4,
+            IDictionary<ArrayTuple, int> fullIndex, IList<TValue> data,
+            IList<T1> keys1, IList<T2> keys2, IList<T3> keys3, IList<T4> keys4,
+            IList<(object, ISet<int>, int)> collapsedKeys, ISet<int> unusedIndices)
+        {
+            _indices1 = indices1;
+            _indices2 = indices2;
+            _indices3 = indices3;
+            _indices4 = indices4;
+            _fullIndex = fullIndex;
+            _data = data;
+            _keys1 = keys1;
+            _keys2 = keys2;
+            _keys3 = keys3;
+            _keys4 = keys4;
+            _collapsedKeys = collapsedKeys;
+            _unusedIndices = unusedIndices;
+        }
         public MultiKeyDictionary() : this(new KeyValuePair<(T1, T2, T3, T4), TValue>[0]) { }
         public MultiKeyDictionary(IEnumerable<KeyValuePair<(T1, T2, T3, T4), TValue>> data)
+            : this(data.Select(x => (x.Key.Item1, x.Key.Item2, x.Key.Item3, x.Key.Item4, x.Value))) { }
+        public MultiKeyDictionary(IEnumerable<(T1, T2, T3, T4, TValue)> data)
         {
-            for (var i = 0; i < 4; i++)
-                _indices.Add(new Dictionary<object, ISet<int>>());
-
+            _indices1 = new Dictionary<T1, ISet<int>>();
+            _indices2 = new Dictionary<T2, ISet<int>>();
+            _indices3 = new Dictionary<T3, ISet<int>>();
+            _indices4 = new Dictionary<T4, ISet<int>>();
+            _fullIndex = new Dictionary<ArrayTuple, int>(100);
+            _data = new List<TValue>(100);
+            _keys1 = new List<T1>(100);
+            _keys2 = new List<T2>(100);
+            _keys3 = new List<T3>(100);
+            _keys4 = new List<T4>(100);
+            _collapsedKeys = new List<(object, ISet<int>, int)>();
+            _unusedIndices = new HashSet<int>();
+            
             var idx = -1;
             foreach (var d in data)
             {
-                _data.Insert(++idx, d.Value);
-                var key = (ITuple)d.Key;
-                for (var i = 0; i < key.Length; i++)
+                ++idx;
+                var (key1, key2, key3, key4, val) = d;
+                _data.Add(val);
+                _fullIndex[ArrayTuple.From(key1, key2, key3, key4)] = idx;
+                _keys1.Add(key1);
+                _keys2.Add(key2);
+                _keys3.Add(key3);
+                _keys4.Add(key4);
+                if (!_indices1.TryGetValue(key1, out var ind1))
                 {
-                    if (!_indices[i].TryGetValue(key[i], out var ind))
+                    ind1 = new HashSet<int>();
+                    _indices1[key1] = ind1;
+                }
+                ind1.Add(idx);
+                if (!_indices2.TryGetValue(key2, out var ind2))
+                {
+                    ind2 = new HashSet<int>();
+                    _indices2[key2] = ind2;
+                }
+                ind2.Add(idx);
+                if (!_indices3.TryGetValue(key3, out var ind3))
+                {
+                    ind3 = new HashSet<int>();
+                    _indices3[key3] = ind3;
+                }
+                ind3.Add(idx);
+                if (!_indices4.TryGetValue(key4, out var ind4))
+                {
+                    ind4 = new HashSet<int>();
+                    _indices4[key4] = ind4;
+                }
+                ind4.Add(idx);
+            }
+        }
+
+        public int Count => GetCollapsedIndexsetOrDefault()?.Count ?? (_data.Count - _unusedIndices.Count);
+
+        /// <summary>
+        /// Sets *all* values in the table (respectively the slice) to the given value
+        /// </summary>
+        /// <param name="value"></param>
+        public void Set(TValue value)
+        {
+            var collapsedIndices = GetCollapsedIndexsetOrDefault();
+            if (collapsedIndices == null)
+            {
+                // set all values
+                for (var i = 0; i < _data.Count; i++)
+                {
+                    // This method also overrides unused indices *shrug*
+                    _data[i] = value;
+                }
+            }
+            else
+            {
+                // set those values that are in the slice
+                foreach (var index in collapsedIndices)
+                    _data[index] = value;
+            }
+        }
+
+        public bool Remove(T1 key1, T2 key2, T3 key3, T4 key4)
+        {
+            ExceptionHandling.ThrowIfNull(key1, nameof(key1));
+            ExceptionHandling.ThrowIfNull(key2, nameof(key2));
+            ExceptionHandling.ThrowIfNull(key3, nameof(key3));
+            ExceptionHandling.ThrowIfNull(key4, nameof(key4));
+
+            var key = ArrayTuple.From(_collapsedKeys, key1, key2, key3, key4);
+            if (!_fullIndex.TryGetValue(key, out var index))
+            {
+                return false;
+            }
+            _fullIndex.Remove(key);
+            _unusedIndices.Add(index);
+            _data[index] = default;
+            _keys1[index] = default;
+            _keys2[index] = default;
+            _keys3[index] = default;
+            _keys4[index] = default;
+            for (var i = 0; i < _collapsedKeys.Count; i++)
+            {
+                _collapsedKeys[i].Item2.Remove(index); // we don't need to manipulate all indices > index, because we don't remove above
+            }
+            _indices1[key1].Remove(index);
+            _indices2[key2].Remove(index);
+            _indices3[key3].Remove(index);
+            _indices4[key4].Remove(index);
+            CheckCompact();
+            return true;
+        }
+
+        public void Clear()
+        {
+            var collapsed = GetCollapsedIndexsetOrDefault();
+            if (collapsed == null)
+            {
+                _fullIndex.Clear();
+                _data.Clear();
+                _keys1.Clear();
+                _keys2.Clear();
+                _keys3.Clear();
+                _keys4.Clear();
+                _unusedIndices.Clear();
+                foreach (var indices in _indices1.Values)
+                {
+                    indices.Clear();
+                }
+                foreach (var indices in _indices2.Values)
+                {
+                    indices.Clear();
+                }
+                foreach (var indices in _indices3.Values)
+                {
+                    indices.Clear();
+                }
+                foreach (var indices in _indices4.Values)
+                {
+                    indices.Clear();
+                }
+                foreach (var indices in _collapsedKeys)
+                {
+                    indices.Item2.Clear();
+                }
+            }
+            else
+            {
+                foreach (var ind in collapsed)
+                {
+                    var key = ArrayTuple.From(_collapsedKeys, _keys1[ind], _keys2[ind], _keys3[ind], _keys4[ind]);
+                    _fullIndex.Remove(key);
+                }
+                foreach (var indices in _indices1.Values)
+                {
+                    indices.ExceptWith(collapsed);
+                }
+                foreach (var indices in _indices2.Values)
+                {
+                    indices.ExceptWith(collapsed);
+                }
+                foreach (var indices in _indices3.Values)
+                {
+                    indices.ExceptWith(collapsed);
+                }
+                foreach (var indices in _indices4.Values)
+                {
+                    indices.ExceptWith(collapsed);
+                }
+                foreach (var indices in _collapsedKeys)
+                {
+                    indices.Item2.ExceptWith(collapsed);
+                }
+                // declare the indices unused and then compact
+                _unusedIndices.UnionWith(collapsed);
+                Compact();
+            }
+        }
+
+        protected void CheckCompact()
+        {
+            if (_unusedIndices.Count > CompactingAbsoluteThreshold
+                && _unusedIndices.Count > _data.Count * CompactingRelativeThreshold)
+                Compact();
+        }
+
+        private void Compact()
+        {
+            if (_unusedIndices.Count == 0) return;
+            var sequence = _unusedIndices.OrderByDescending(x => x).ToList();
+            var offsets = new Dictionary<int, int>();
+            var offset = 0;
+            var offsetIndex = 0;
+            for (var i = sequence.Count - 1; i >= 0; i--)
+            {
+                var index = sequence[i];
+                if (offset > 0)
+                {
+                    for (var o = offsetIndex; o < index; o++)
                     {
-                        ind = new HashSet<int>();
-                        _indices[i][key[i]] = ind;
+                        offsets[o] = offset;
                     }
-                    ind.Add(idx);
+                }
+                offsetIndex = index;
+                offset++;
+                _data.RemoveAt(sequence[sequence.Count - 1 - i]);
+                _keys1.RemoveAt(sequence[sequence.Count - 1 - i]);
+                _keys2.RemoveAt(sequence[sequence.Count - 1 - i]);
+                _keys3.RemoveAt(sequence[sequence.Count - 1 - i]);
+                _keys4.RemoveAt(sequence[sequence.Count - 1 - i]);
+            }
+            for (var o = offsetIndex; o < _data.Count + offset; o++)
+            {
+                offsets[o] = offset;
+            }
+            foreach (var kvp in _fullIndex.ToArray())
+            {
+                if (offsets.TryGetValue(kvp.Value, out var off))
+                {
+                    _fullIndex[kvp.Key] = kvp.Value - off;
+                }
+            }
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.Item2.ExceptWith(_unusedIndices);
+                var reindex = indices.Item2.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
+                {
+                    indices.Item2.ExceptWith(reindex.Select(x => x.index));
+                    indices.Item2.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            foreach (var kvp in _indices1)
+            {
+                var key = kvp.Key;
+                var indices = kvp.Value;
+                indices.ExceptWith(_unusedIndices);
+                var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
+                {
+                    indices.ExceptWith(reindex.Select(x => x.index));
+                    indices.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            foreach (var kvp in _indices2)
+            {
+                var key = kvp.Key;
+                var indices = kvp.Value;
+                indices.ExceptWith(_unusedIndices);
+                var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
+                {
+                    indices.ExceptWith(reindex.Select(x => x.index));
+                    indices.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            foreach (var kvp in _indices3)
+            {
+                var key = kvp.Key;
+                var indices = kvp.Value;
+                indices.ExceptWith(_unusedIndices);
+                var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
+                {
+                    indices.ExceptWith(reindex.Select(x => x.index));
+                    indices.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            foreach (var kvp in _indices4)
+            {
+                var key = kvp.Key;
+                var indices = kvp.Value;
+                indices.ExceptWith(_unusedIndices);
+                var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
+                {
+                    indices.ExceptWith(reindex.Select(x => x.index));
+                    indices.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            _unusedIndices.Clear();
+        }
+
+        public bool Contains(T1 key1, T2 key2, T3 key3, T4 key4)
+        {
+            return _fullIndex.ContainsKey(ArrayTuple.From(_collapsedKeys, key1, key2, key3, key4));
+        }
+
+#if NET472 || NET481
+        protected ISet<int> GetCollapsedIndexsetOrDefault()
+        {
+            HashSet<int> collapsedIndices = null;
+#else
+        protected ISet<int>? GetCollapsedIndexsetOrDefault()
+        {
+            HashSet<int>? collapsedIndices = null;
+#endif
+            if (_collapsedKeys.Count > 0)
+            {
+                foreach (var collapsedSet in _collapsedKeys.Select(x => x.Item2).OrderBy(x => x.Count))
+                {
+                    if (collapsedIndices == null)
+                        collapsedIndices = new HashSet<int>(collapsedSet);
+                    else collapsedIndices.IntersectWith(collapsedSet);
+                }
+            }
+            return collapsedIndices;
+        }
+
+        public IEnumerable<TValue> EnumerateValues()
+        {
+            var collapsedIndices = GetCollapsedIndexsetOrDefault();
+            if (collapsedIndices == null)
+            {
+                for (var i = 0; i < _data.Count; i++)
+                {
+                    if (!_unusedIndices.Contains(i))
+                        yield return _data[i];
+                }
+            }
+            else
+            {
+                foreach (var index in collapsedIndices)
+                {
+                    yield return _data[index];
                 }
             }
         }
-        public MultiKeyDictionary(IEnumerable<(T1, T2, T3, T4, TValue)> data)
-        {
-            for (var i = 0; i < 4; i++)
-                _indices.Add(new Dictionary<object, ISet<int>>());
 
-            var idx = -1;
-            foreach (var d in data)
-            {
-                _data.Insert(++idx, d.Item5);
-                var key = (ITuple)d;
-                for (var i = 0; i < key.Length - 1; i++)
-                {
-                    if (!_indices[i].TryGetValue(key[i], out var ind))
-                    {
-                        ind = new HashSet<int>();
-                        _indices[i][key[i]] = ind;
-                    }
-                    ind.Add(idx);
-                }
-            }
+        IEnumerator<TValue> IEnumerable<TValue>.GetEnumerator()
+        {
+            return EnumerateValues().GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return EnumerateValues().GetEnumerator();
         }
 
         public TValue this[T1 key1, T2 key2, T3 key3, T4 key4]
@@ -963,28 +1473,11 @@ namespace TableCollections
                 ExceptionHandling.ThrowIfNull(key2, nameof(key2));
                 ExceptionHandling.ThrowIfNull(key3, nameof(key3));
                 ExceptionHandling.ThrowIfNull(key4, nameof(key4));
-                if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
-                    throw new ArgumentException($"Key not found {key1}");
-                if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
-                    throw new ArgumentException($"Key not found {key2}");
-                if (!_indices[2].TryGetValue(key3, out var indices3) || indices3.Count == 0)
-                    throw new ArgumentException($"Key not found {key3}");
-                if (!_indices[3].TryGetValue(key4, out var indices4) || indices4.Count == 0)
-                    throw new ArgumentException($"Key not found {key4}");
-                var index = -1;
-                var indices = GetCollapsedIndexsetOrDefault();
-                if (indices != null)
+                if (!_fullIndex.TryGetValue(ArrayTuple.From(_collapsedKeys, key1, key2, key3, key4), out var index))
                 {
-                    indices.IntersectWith(indices1);
-                    indices.IntersectWith(indices2);
-                    indices.IntersectWith(indices3);
-                    indices.IntersectWith(indices4);
-                    index = indices.Single();
+                    throw new ArgumentException($"Key combination {(key1, key2, key3, key4)} not found");
                 }
-                else
-                {
-                    index = indices1.Intersect(indices2).Intersect(indices3).Intersect(indices4).Single();
-                }
+
                 return _data[index];
             }
             set
@@ -993,64 +1486,62 @@ namespace TableCollections
                 ExceptionHandling.ThrowIfNull(key2, nameof(key2));
                 ExceptionHandling.ThrowIfNull(key3, nameof(key3));
                 ExceptionHandling.ThrowIfNull(key4, nameof(key4));
-                var tuple = (ITuple)(key1, key2, key3, key4);
-                var index = -1;
-                var indices = GetCollapsedIndexsetOrDefault();
-                if (indices != null)
-                {
-                    for (var i = 0; i < tuple.Length; i++)
-                    {
-                        if (!_indices[i].TryGetValue(tuple[i], out var ind))
-                        {
-                            ind = new HashSet<int>();
-                            _indices[i][tuple[i]] = ind;
-                        }
-                        indices.IntersectWith(ind);
-                    }
-                    if (indices.Count > 0)
-                        index = indices.Single();
-                }
-                else
-                {
-                    IEnumerable<int> filtered = null;
-                    for (var i = 0; i < tuple.Length; i++)
-                    {
-                        if (!_indices[i].TryGetValue(tuple[i], out var ind))
-                        {
-                            ind = new HashSet<int>();
-                            _indices[i][tuple[i]] = ind;
-                        }
-                        filtered = filtered == null ? ind : filtered.Intersect(ind);
-                    }
-                    foreach (var i in filtered ?? Enumerable.Empty<int>())
-                    {
-                        if (index != -1) throw new InvalidOperationException(); // Single() for non-negative enumerable
-                        index = i;
-                    }
-                }
+
+                var tupKey = ArrayTuple.From(_collapsedKeys, key1, key2, key3, key4);
+                if (!_fullIndex.TryGetValue(tupKey, out var index))
+                    index = -1;
                 if (index < 0)
                 {
+                    if (!_indices1.TryGetValue(key1, out var indices1))
+                    {
+                        indices1 = new HashSet<int>();
+                        _indices1[key1] = indices1;
+                    }
+                    if (!_indices2.TryGetValue(key2, out var indices2))
+                    {
+                        indices2 = new HashSet<int>();
+                        _indices2[key2] = indices2;
+                    }
+                    if (!_indices3.TryGetValue(key3, out var indices3))
+                    {
+                        indices3 = new HashSet<int>();
+                        _indices3[key3] = indices3;
+                    }
+                    if (!_indices4.TryGetValue(key4, out var indices4))
+                    {
+                        indices4 = new HashSet<int>();
+                        _indices4[key4] = indices4;
+                    }
                     if (_unusedIndices.Count > 0)
                     {
                         // reuse an unused index
                         index = _unusedIndices.First();
                         _unusedIndices.Remove(index);
                         _data[index] = value;
+                        _keys1[index] = key1;
+                        _keys2[index] = key2;
+                        _keys3[index] = key3;
+                        _keys4[index] = key4;
                     }
                     else
                     {
                         // make an insert at the end
                         index = _data.Count;
-                        _data.Insert(index, value);
+                        _data.Add(value);
+                        _keys1.Add(key1);
+                        _keys2.Add(key2);
+                        _keys3.Add(key3);
+                        _keys4.Add(key4);
                     }
-                    for (var i = 0; i < tuple.Length; i++)
-                    {
-                        _indices[i][tuple[i]].Add(index);
-                    }
+                    _fullIndex[tupKey] = index;
+                    indices1.Add(index);
+                    indices2.Add(index);
+                    indices3.Add(index);
+                    indices4.Add(index);
                     // the data needs to be added to all collapsed dimensions
                     foreach (var f in _collapsedKeys)
                     {
-                        f.Add(index);
+                        f.Item2.Add(index);
                     }
                 }
                 else
@@ -1076,20 +1567,28 @@ namespace TableCollections
 
         public int Remove1(T1 key1)
         {
-            if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
+            if (!_indices1.TryGetValue(key1, out var indices1) || indices1.Count == 0)
                 return 0;
+            foreach (var index in indices1)
+            {
+                var key = ArrayTuple.From(_collapsedKeys, _keys1[index], _keys2[index], _keys3[index], _keys4[index]);
+                _fullIndex.Remove(key);
+            }
             foreach (var indices in _collapsedKeys)
+            {
+                indices.Item2.ExceptWith(indices1);
+            }
+            foreach (var indices in _indices2.Values)
             {
                 indices.ExceptWith(indices1);
             }
-            foreach (var dict in _indices)
+            foreach (var indices in _indices3.Values)
             {
-                foreach (var indices in dict.Values)
-                {
-                    if (indices == indices1)
-                        continue;
-                    indices.ExceptWith(indices1);
-                }
+                indices.ExceptWith(indices1);
+            }
+            foreach (var indices in _indices4.Values)
+            {
+                indices.ExceptWith(indices1);
             }
             var removed = indices1.Count;
             _unusedIndices.UnionWith(indices1);
@@ -1100,20 +1599,28 @@ namespace TableCollections
 
         public int Remove2(T2 key2)
         {
-            if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
+            if (!_indices2.TryGetValue(key2, out var indices2) || indices2.Count == 0)
                 return 0;
+            foreach (var index in indices2)
+            {
+                var key = ArrayTuple.From(_collapsedKeys, _keys1[index], _keys2[index], _keys3[index], _keys4[index]);
+                _fullIndex.Remove(key);
+            }
             foreach (var indices in _collapsedKeys)
+            {
+                indices.Item2.ExceptWith(indices2);
+            }
+            foreach (var indices in _indices1.Values)
             {
                 indices.ExceptWith(indices2);
             }
-            foreach (var dict in _indices)
+            foreach (var indices in _indices3.Values)
             {
-                foreach (var indices in dict.Values)
-                {
-                    if (indices == indices2)
-                        continue;
-                    indices.ExceptWith(indices2);
-                }
+                indices.ExceptWith(indices2);
+            }
+            foreach (var indices in _indices4.Values)
+            {
+                indices.ExceptWith(indices2);
             }
             var removed = indices2.Count;
             _unusedIndices.UnionWith(indices2);
@@ -1124,20 +1631,28 @@ namespace TableCollections
 
         public int Remove3(T3 key3)
         {
-            if (!_indices[2].TryGetValue(key3, out var indices3) || indices3.Count == 0)
+            if (!_indices3.TryGetValue(key3, out var indices3) || indices3.Count == 0)
                 return 0;
+            foreach (var index in indices3)
+            {
+                var key = ArrayTuple.From(_collapsedKeys, _keys1[index], _keys2[index], _keys3[index], _keys4[index]);
+                _fullIndex.Remove(key);
+            }
             foreach (var indices in _collapsedKeys)
+            {
+                indices.Item2.ExceptWith(indices3);
+            }
+            foreach (var indices in _indices1.Values)
             {
                 indices.ExceptWith(indices3);
             }
-            foreach (var dict in _indices)
+            foreach (var indices in _indices2.Values)
             {
-                foreach (var indices in dict.Values)
-                {
-                    if (indices == indices3)
-                        continue;
-                    indices.ExceptWith(indices3);
-                }
+                indices.ExceptWith(indices3);
+            }
+            foreach (var indices in _indices4.Values)
+            {
+                indices.ExceptWith(indices3);
             }
             var removed = indices3.Count;
             _unusedIndices.UnionWith(indices3);
@@ -1148,20 +1663,28 @@ namespace TableCollections
 
         public int Remove4(T4 key4)
         {
-            if (!_indices[3].TryGetValue(key4, out var indices4) || indices4.Count == 0)
+            if (!_indices4.TryGetValue(key4, out var indices4) || indices4.Count == 0)
                 return 0;
+            foreach (var index in indices4)
+            {
+                var key = ArrayTuple.From(_collapsedKeys, _keys1[index], _keys2[index], _keys3[index], _keys4[index]);
+                _fullIndex.Remove(key);
+            }
             foreach (var indices in _collapsedKeys)
+            {
+                indices.Item2.ExceptWith(indices4);
+            }
+            foreach (var indices in _indices1.Values)
             {
                 indices.ExceptWith(indices4);
             }
-            foreach (var dict in _indices)
+            foreach (var indices in _indices2.Values)
             {
-                foreach (var indices in dict.Values)
-                {
-                    if (indices == indices4)
-                        continue;
-                    indices.ExceptWith(indices4);
-                }
+                indices.ExceptWith(indices4);
+            }
+            foreach (var indices in _indices3.Values)
+            {
+                indices.ExceptWith(indices4);
             }
             var removed = indices4.Count;
             _unusedIndices.UnionWith(indices4);
@@ -1176,79 +1699,67 @@ namespace TableCollections
         public bool TryGetValue(T1 key1, T2 key2, T3 key3, T4 key4, out TValue? value)
 #endif
         {
-            value = default;
-            if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
+            if (!_fullIndex.TryGetValue(ArrayTuple.From(_collapsedKeys, key1, key2, key3, key4), out var index))
+            {
+                value = default;
                 return false;
-            if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
-                return false;
-            if (!_indices[2].TryGetValue(key3, out var indices3) || indices3.Count == 0)
-                return false;
-            if (!_indices[3].TryGetValue(key4, out var indices4) || indices4.Count == 0)
-                return false;
-
-            var indices = GetCollapsedIndexsetOrDefault();
-            if (indices == null) indices = new HashSet<int>(indices1);
-            else indices.IntersectWith(indices1);
-            indices.IntersectWith(indices2);
-            indices.IntersectWith(indices3);          
-            indices.IntersectWith(indices4);
-            if (indices.Count != 1) return false;
-            value = _data[indices.Single()];
+            }
+            value = _data[index];
             return true;
         }
 
         public MultiKeyDictionary<T2, T3, T4, TValue> Slice1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
-            {
-                throw new ArgumentException($"Key not found {key1}");
-            }
+            var ind = _indices1[key1];
+            if (ind.Count == 0) throw new ArgumentException($"key {key1} not found", nameof(key1));
             return new MultiKeyDictionary<T2, T3, T4, TValue>(
-                new[] { _indices[1], _indices[2], _indices[3] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
+                _indices2, _indices3, _indices4,
+                _fullIndex,
+                _data, _keys2, _keys3, _keys4,
+                _collapsedKeys.Concat(new[] { ((object)key1, ind, 0) }).ToList(), _unusedIndices);
         }
 
         public MultiKeyDictionary<T1, T3, T4, TValue> Slice2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
-            {
-                throw new ArgumentException($"Key not found {key2}");
-            }
+            var ind = _indices2[key2];
+            if (ind.Count == 0) throw new ArgumentException($"key {key2} not found", nameof(key2));
             return new MultiKeyDictionary<T1, T3, T4, TValue>(
-                new[] { _indices[0], _indices[2], _indices[3] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
+                _indices1, _indices3, _indices4,
+                _fullIndex,
+                _data, _keys1, _keys3, _keys4,
+                _collapsedKeys.Concat(new[] { ((object)key2, ind, 1) }).ToList(), _unusedIndices);
         }
 
         public MultiKeyDictionary<T1, T2, T4, TValue> Slice3(T3 key3)
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-            if (!_indices[2].TryGetValue(key3, out var ind) || ind.Count == 0)
-            {
-                throw new ArgumentException($"Key not found {key3}");
-            }
+            var ind = _indices3[key3];
+            if (ind.Count == 0) throw new ArgumentException($"key {key3} not found", nameof(key3));
             return new MultiKeyDictionary<T1, T2, T4, TValue>(
-                new[] { _indices[0], _indices[1], _indices[3] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
+                _indices1, _indices2, _indices4,
+                _fullIndex,
+                _data, _keys1, _keys2, _keys4,
+                _collapsedKeys.Concat(new[] { ((object)key3, ind, 2) }).ToList(), _unusedIndices);
         }
 
         public MultiKeyDictionary<T1, T2, T3, TValue> Slice4(T4 key4)
         {
             ExceptionHandling.ThrowIfNull(key4, nameof(key4));
-            if (!_indices[3].TryGetValue(key4, out var ind) || ind.Count == 0)
-            {
-                throw new ArgumentException($"Key not found {key4}");
-            }
+            var ind = _indices4[key4];
+            if (ind.Count == 0) throw new ArgumentException($"key {key4} not found", nameof(key4));
             return new MultiKeyDictionary<T1, T2, T3, TValue>(
-                new[] { _indices[0], _indices[1], _indices[2] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
+                _indices1, _indices2, _indices3,
+                _fullIndex,
+                _data, _keys1, _keys2, _keys3,
+                _collapsedKeys.Concat(new[] { ((object)key4, ind, 3) }).ToList(), _unusedIndices);
         }
 
         public bool ContainsKey1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
+            if (!_indices1.TryGetValue(key1, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -1267,7 +1778,7 @@ namespace TableCollections
         public bool ContainsKey2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
+            if (!_indices2.TryGetValue(key2, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -1286,7 +1797,7 @@ namespace TableCollections
         public bool ContainsKey3(T3 key3)
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-            if (!_indices[2].TryGetValue(key3, out var ind) || ind.Count == 0)
+            if (!_indices3.TryGetValue(key3, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -1305,7 +1816,7 @@ namespace TableCollections
         public bool ContainsKey4(T4 key4)
         {
             ExceptionHandling.ThrowIfNull(key4, nameof(key4));
-            if (!_indices[3].TryGetValue(key4, out var ind) || ind.Count == 0)
+            if (!_indices4.TryGetValue(key4, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -1328,10 +1839,9 @@ namespace TableCollections
 #endif
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (_indices[0].TryGetValue(key1, out var indices) && indices.Count > 0)
+            if (_indices1.TryGetValue(key1, out var indices) && indices.Count > 0)
             {
-                values = new MultiKeyDictionary<T2, T3, T4, TValue>(new[] { _indices[1], _indices[2], _indices[3] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
+                values = Slice1(key1);
                 return true;
             }
             values = default;
@@ -1345,10 +1855,9 @@ namespace TableCollections
 #endif
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (_indices[1].TryGetValue(key2, out var indices) && indices.Count > 0)
+            if (_indices2.TryGetValue(key2, out var indices) && indices.Count > 0)
             {
-                values = new MultiKeyDictionary<T1, T3, T4, TValue>(new[] { _indices[0], _indices[2], _indices[3] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
+                values = Slice2(key2);
                 return true;
             }
             values = default;
@@ -1362,10 +1871,9 @@ namespace TableCollections
 #endif
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-            if (_indices[2].TryGetValue(key3, out var indices) && indices.Count > 0)
+            if (_indices3.TryGetValue(key3, out var indices) && indices.Count > 0)
             {
-                values = new MultiKeyDictionary<T1, T2, T4, TValue>(new[] { _indices[0], _indices[1], _indices[3] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
+                values = Slice3(key3);
                 return true;
             }
             values = default;
@@ -1379,10 +1887,9 @@ namespace TableCollections
 #endif
         {
             ExceptionHandling.ThrowIfNull(key4, nameof(key4));
-            if (_indices[3].TryGetValue(key4, out var indices) && indices.Count > 0)
+            if (_indices4.TryGetValue(key4, out var indices) && indices.Count > 0)
             {
-                values = new MultiKeyDictionary<T1, T2, T3, TValue>(new[] { _indices[0], _indices[1], _indices[2] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
+                values = Slice4(key4);
                 return true;
             }
             values = default;
@@ -1392,95 +1899,383 @@ namespace TableCollections
         public IEnumerable<(T1, T2, T3, T4, TValue)> Enumerate()
         {
             var collapsedIndices = GetCollapsedIndexsetOrDefault();
-            IEnumerable<(T1, int)> result1 = (collapsedIndices != null
-                ? _indices[0].Select(x => x.Value.Where(y => collapsedIndices.Contains(y)).Select(y => ((T1)x.Key, y))).SelectMany(x => x)
-                : _indices[0].Select(x => x.Value.Select(y => ((T1)x.Key, y))).SelectMany(x => x)).OrderBy(x => x.Item2);
-            IEnumerable<(T2, int)> result2 = (collapsedIndices != null
-                ? _indices[1].Select(x => x.Value.Where(y => collapsedIndices.Contains(y)).Select(y => ((T2)x.Key, y))).SelectMany(x => x)
-                : _indices[1].Select(x => x.Value.Select(y => ((T2)x.Key, y))).SelectMany(x => x)).OrderBy(x => x.Item2);
-            IEnumerable<(T3, int)> result3 = (collapsedIndices != null
-                ? _indices[2].Select(x => x.Value.Where(y => collapsedIndices.Contains(y)).Select(y => ((T3)x.Key, y))).SelectMany(x => x)
-                : _indices[2].Select(x => x.Value.Select(y => ((T3)x.Key, y))).SelectMany(x => x)).OrderBy(x => x.Item2);
-            IEnumerable<(T4, int)> result4 = (collapsedIndices != null
-                ? _indices[3].Select(x => x.Value.Where(y => collapsedIndices.Contains(y)).Select(y => ((T4)x.Key, y))).SelectMany(x => x)
-                : _indices[3].Select(x => x.Value.Select(y => ((T4)x.Key, y))).SelectMany(x => x)).OrderBy(x => x.Item2);
-            var r1Iter = result1.GetEnumerator();
-            var r2Iter = result2.GetEnumerator();
-            var r3Iter = result3.GetEnumerator();
-            var r4Iter = result4.GetEnumerator();
-            while (r1Iter.MoveNext())
+            if (collapsedIndices != null)
             {
-#if DEBUG
-                if (!r2Iter.MoveNext()) throw new InvalidOperationException();
-                if (r2Iter.Current.Item2 != r1Iter.Current.Item2) throw new InvalidOperationException();
-                if (!r3Iter.MoveNext()) throw new InvalidOperationException();
-                if (r3Iter.Current.Item2 != r1Iter.Current.Item2) throw new InvalidOperationException();
-                if (!r4Iter.MoveNext()) throw new InvalidOperationException();
-                if (r4Iter.Current.Item2 != r1Iter.Current.Item2) throw new InvalidOperationException();
-#else
-                r2Iter.MoveNext();
-                r3Iter.MoveNext();
-                r4Iter.MoveNext();
-#endif
-                yield return ((T1)r1Iter.Current.Item1, (T2)r2Iter.Current.Item1, (T3)r3Iter.Current.Item1, (T4)r4Iter.Current.Item1, _data[r1Iter.Current.Item2]);
+                foreach (var i in collapsedIndices)
+                {
+                    yield return ((T1)_keys1[i], (T2)_keys2[i], (T3)_keys3[i], (T4)_keys4[i], _data[i]);
+                }
+            }
+            else
+            {
+                for (var i = 0; i < _data.Count; i++)
+                {
+                    if (!_unusedIndices.Contains(i))
+                        yield return ((T1)_keys1[i], (T2)_keys2[i], (T3)_keys3[i], (T4)_keys4[i], _data[i]);
+                }
             }
         }
 
         public Dictionary<(T1, T2, T3, T4), TValue> ToDictionary() => Enumerate().ToDictionary(x => (x.Item1, x.Item2, x.Item3, x.Item4), x => x.Item5);
     }
 
-    public class MultiKeyDictionary<T1, T2, T3, TValue> : MultiKeyDictionary<TValue>
+    public class MultiKeyDictionary<T1, T2, T3, TValue> : IEnumerable<TValue>
 #if !(NET472 || NET481)
         where T1 : notnull
         where T2 : notnull
         where T3 : notnull
 #endif
     {
+        private const int KEYS = 4;
+        private IDictionary<T1, ISet<int>> _indices1;
+        private IDictionary<T2, ISet<int>> _indices2;
+        private IDictionary<T3, ISet<int>> _indices3;
+        private IDictionary<ArrayTuple, int> _fullIndex;
+        private IList<TValue> _data;
+        private IList<T1> _keys1;
+        private IList<T2> _keys2;
+        private IList<T3> _keys3;
+        private IList<(object, ISet<int>, int)> _collapsedKeys;
+        private ISet<int> _unusedIndices;
 
-        protected internal MultiKeyDictionary(IList<IDictionary<object, ISet<int>>> indices,
-            IList<TValue> data, IList<ISet<int>> collapsedKeys, ISet<int> unusedIndices) : base(indices, data, collapsedKeys, unusedIndices) { }
+        /// <summary>
+        /// Removals do not actually remove data from the table, but just delete the index.
+        /// If a lot of Remove operations are performed, the table will become very sparsely populated with actual data.
+        /// This setting controls the absolute number of unused indices that will trigger a compaction.
+        /// Both this and the relative threshold must be met for a compaction to occur.
+        /// </summary>
+        /// <value>The number of unused indices before a compaction is performed.</value>
+        public int CompactingAbsoluteThreshold { get; set; } = 1000;
+        /// <summary>
+        /// Removals do not actually remove data from the table, but just delete the index.
+        /// If a lot of Remove operations are performed, the table will become very sparsely populated with actual data.
+        /// This setting controls the relative number of unused indices that will trigger a compaction.
+        /// Both this and the absolute threshold must be met for a compaction to occur.
+        /// </summary>
+        /// <value>The relative number of unused indices (relative to the full size of the array) before a compaction is performed.</value>
+        public double CompactingRelativeThreshold { get; set; } = 0.01;
+
+
+        protected internal MultiKeyDictionary(IDictionary<T1, ISet<int>> indices1,
+            IDictionary<T2, ISet<int>> indices2, IDictionary<T3, ISet<int>> indices3,
+            IDictionary<ArrayTuple, int> fullIndex, IList<TValue> data,
+            IList<T1> keys1, IList<T2> keys2, IList<T3> keys3,
+            IList<(object, ISet<int>, int)> collapsedKeys, ISet<int> unusedIndices)
+        {
+            _indices1 = indices1;
+            _indices2 = indices2;
+            _indices3 = indices3;
+            _fullIndex = fullIndex;
+            _data = data;
+            _keys1 = keys1;
+            _keys2 = keys2;
+            _keys3 = keys3;
+            _collapsedKeys = collapsedKeys;
+            _unusedIndices = unusedIndices;
+        }
         public MultiKeyDictionary() : this(new KeyValuePair<(T1, T2, T3), TValue>[0]) { }
         public MultiKeyDictionary(IEnumerable<KeyValuePair<(T1, T2, T3), TValue>> data)
+            : this(data.Select(x => (x.Key.Item1, x.Key.Item2, x.Key.Item3, x.Value))) { }
+        public MultiKeyDictionary(IEnumerable<(T1, T2, T3, TValue)> data)
         {
-            for (var i = 0; i < 3; i++)
-                _indices.Add(new Dictionary<object, ISet<int>>());
+            _indices1 = new Dictionary<T1, ISet<int>>();
+            _indices2 = new Dictionary<T2, ISet<int>>();
+            _indices3 = new Dictionary<T3, ISet<int>>();
+            _fullIndex = new Dictionary<ArrayTuple, int>(100);
+            _data = new List<TValue>(100);
+            _keys1 = new List<T1>(100);
+            _keys2 = new List<T2>(100);
+            _keys3 = new List<T3>(100);
+            _collapsedKeys = new List<(object, ISet<int>, int)>();
+            _unusedIndices = new HashSet<int>();
 
             var idx = -1;
             foreach (var d in data)
             {
-                _data.Insert(++idx, d.Value);
-                var key = (ITuple)d.Key;
-                for (var i = 0; i < key.Length; i++)
+                ++idx;
+                var (key1, key2, key3, val) = d;
+                _data.Add(val);
+                _fullIndex[ArrayTuple.From(key1, key2, key3)] = idx;
+                _keys1.Add(key1);
+                _keys2.Add(key2);
+                _keys3.Add(key3);
+                if (!_indices1.TryGetValue(key1, out var ind1))
                 {
-                    if (!_indices[i].TryGetValue(key[i], out var ind))
+                    ind1 = new HashSet<int>();
+                    _indices1[key1] = ind1;
+                }
+                ind1.Add(idx);
+                if (!_indices2.TryGetValue(key2, out var ind2))
+                {
+                    ind2 = new HashSet<int>();
+                    _indices2[key2] = ind2;
+                }
+                ind2.Add(idx);
+                if (!_indices3.TryGetValue(key3, out var ind3))
+                {
+                    ind3 = new HashSet<int>();
+                    _indices3[key3] = ind3;
+                }
+                ind3.Add(idx);
+            }
+        }
+
+        public int Count => GetCollapsedIndexsetOrDefault()?.Count ?? (_data.Count - _unusedIndices.Count);
+
+        /// <summary>
+        /// Sets *all* values in the table (respectively the slice) to the given value
+        /// </summary>
+        /// <param name="value"></param>
+        public void Set(TValue value)
+        {
+            var collapsedIndices = GetCollapsedIndexsetOrDefault();
+            if (collapsedIndices == null)
+            {
+                // set all values
+                for (var i = 0; i < _data.Count; i++)
+                {
+                    // This method also overrides unused indices *shrug*
+                    _data[i] = value;
+                }
+            }
+            else
+            {
+                // set those values that are in the slice
+                foreach (var index in collapsedIndices)
+                    _data[index] = value;
+            }
+        }
+
+        public bool Remove(T1 key1, T2 key2, T3 key3)
+        {
+            ExceptionHandling.ThrowIfNull(key1, nameof(key1));
+            ExceptionHandling.ThrowIfNull(key2, nameof(key2));
+            ExceptionHandling.ThrowIfNull(key3, nameof(key3));
+
+            var key = ArrayTuple.From(_collapsedKeys, key1, key2, key3);
+            if (!_fullIndex.TryGetValue(key, out var index))
+            {
+                return false;
+            }
+            _fullIndex.Remove(key);
+            _unusedIndices.Add(index);
+            _data[index] = default;
+            _keys1[index] = default;
+            _keys2[index] = default;
+            _keys3[index] = default;
+            for (var i = 0; i < _collapsedKeys.Count; i++)
+            {
+                _collapsedKeys[i].Item2.Remove(index); // we don't need to manipulate all indices > index, because we don't remove above
+            }
+            _indices1[key1].Remove(index);
+            _indices2[key2].Remove(index);
+            _indices3[key3].Remove(index);
+            CheckCompact();
+            return true;
+        }
+
+        public void Clear()
+        {
+            var collapsed = GetCollapsedIndexsetOrDefault();
+            if (collapsed == null)
+            {
+                _fullIndex.Clear();
+                _data.Clear();
+                _keys1.Clear();
+                _keys2.Clear();
+                _keys3.Clear();
+                _unusedIndices.Clear();
+                foreach (var indices in _indices1.Values)
+                {
+                    indices.Clear();
+                }
+                foreach (var indices in _indices2.Values)
+                {
+                    indices.Clear();
+                }
+                foreach (var indices in _indices3.Values)
+                {
+                    indices.Clear();
+                }
+                foreach (var indices in _collapsedKeys)
+                {
+                    indices.Item2.Clear();
+                }
+            }
+            else
+            {
+                foreach (var ind in collapsed)
+                {
+                    var key = ArrayTuple.From(_collapsedKeys, _keys1[ind], _keys2[ind], _keys3[ind]);
+                    _fullIndex.Remove(key);
+                }
+                foreach (var indices in _indices1.Values)
+                {
+                    indices.ExceptWith(collapsed);
+                }
+                foreach (var indices in _indices2.Values)
+                {
+                    indices.ExceptWith(collapsed);
+                }
+                foreach (var indices in _indices3.Values)
+                {
+                    indices.ExceptWith(collapsed);
+                }
+                foreach (var indices in _collapsedKeys)
+                {
+                    indices.Item2.ExceptWith(collapsed);
+                }
+                // declare the indices unused and then compact
+                _unusedIndices.UnionWith(collapsed);
+                Compact();
+            }
+        }
+
+        protected void CheckCompact()
+        {
+            if (_unusedIndices.Count > CompactingAbsoluteThreshold
+                && _unusedIndices.Count > _data.Count * CompactingRelativeThreshold)
+                Compact();
+        }
+
+        private void Compact()
+        {
+            if (_unusedIndices.Count == 0) return;
+            var sequence = _unusedIndices.OrderByDescending(x => x).ToList();
+            var offsets = new Dictionary<int, int>();
+            var offset = 0;
+            var offsetIndex = 0;
+            for (var i = sequence.Count - 1; i >= 0; i--)
+            {
+                var index = sequence[i];
+                if (offset > 0)
+                {
+                    for (var o = offsetIndex; o < index; o++)
                     {
-                        ind = new HashSet<int>();
-                        _indices[i][key[i]] = ind;
+                        offsets[o] = offset;
                     }
-                    ind.Add(idx);
+                }
+                offsetIndex = index;
+                offset++;
+                _data.RemoveAt(sequence[sequence.Count - 1 - i]);
+                _keys1.RemoveAt(sequence[sequence.Count - 1 - i]);
+                _keys2.RemoveAt(sequence[sequence.Count - 1 - i]);
+                _keys3.RemoveAt(sequence[sequence.Count - 1 - i]);
+            }
+            for (var o = offsetIndex; o < _data.Count + offset; o++)
+            {
+                offsets[o] = offset;
+            }
+            foreach (var kvp in _fullIndex.ToArray())
+            {
+                if (offsets.TryGetValue(kvp.Value, out var off))
+                {
+                    _fullIndex[kvp.Key] = kvp.Value - off;
+                }
+            }
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.Item2.ExceptWith(_unusedIndices);
+                var reindex = indices.Item2.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
+                {
+                    indices.Item2.ExceptWith(reindex.Select(x => x.index));
+                    indices.Item2.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            foreach (var kvp in _indices1)
+            {
+                var key = kvp.Key;
+                var indices = kvp.Value;
+                indices.ExceptWith(_unusedIndices);
+                var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
+                {
+                    indices.ExceptWith(reindex.Select(x => x.index));
+                    indices.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            foreach (var kvp in _indices2)
+            {
+                var key = kvp.Key;
+                var indices = kvp.Value;
+                indices.ExceptWith(_unusedIndices);
+                var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
+                {
+                    indices.ExceptWith(reindex.Select(x => x.index));
+                    indices.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            foreach (var kvp in _indices3)
+            {
+                var key = kvp.Key;
+                var indices = kvp.Value;
+                indices.ExceptWith(_unusedIndices);
+                var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
+                {
+                    indices.ExceptWith(reindex.Select(x => x.index));
+                    indices.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            _unusedIndices.Clear();
+        }
+
+        public bool Contains(T1 key1, T2 key2, T3 key3)
+        {
+            return _fullIndex.ContainsKey(ArrayTuple.From(_collapsedKeys, key1, key2, key3));
+        }
+
+#if NET472 || NET481
+        protected ISet<int> GetCollapsedIndexsetOrDefault()
+        {
+            HashSet<int> collapsedIndices = null;
+#else
+        protected ISet<int>? GetCollapsedIndexsetOrDefault()
+        {
+            HashSet<int>? collapsedIndices = null;
+#endif
+            if (_collapsedKeys.Count > 0)
+            {
+                foreach (var collapsedSet in _collapsedKeys.Select(x => x.Item2).OrderBy(x => x.Count))
+                {
+                    if (collapsedIndices == null)
+                        collapsedIndices = new HashSet<int>(collapsedSet);
+                    else collapsedIndices.IntersectWith(collapsedSet);
+                }
+            }
+            return collapsedIndices;
+        }
+
+        public IEnumerable<TValue> EnumerateValues()
+        {
+            var collapsedIndices = GetCollapsedIndexsetOrDefault();
+            if (collapsedIndices == null)
+            {
+                for (var i = 0; i < _data.Count; i++)
+                {
+                    if (!_unusedIndices.Contains(i))
+                        yield return _data[i];
+                }
+            }
+            else
+            {
+                foreach (var index in collapsedIndices)
+                {
+                    yield return _data[index];
                 }
             }
         }
-        public MultiKeyDictionary(IEnumerable<(T1, T2, T3, TValue)> data)
-        {
-            for (var i = 0; i < 3; i++)
-                _indices.Add(new Dictionary<object, ISet<int>>());
 
-            var idx = -1;
-            foreach (var d in data)
-            {
-                _data.Insert(++idx, d.Item4);
-                var key = (ITuple)d;
-                for (var i = 0; i < key.Length - 1; i++)
-                {
-                    if (!_indices[i].TryGetValue(key[i], out var ind))
-                    {
-                        ind = new HashSet<int>();
-                        _indices[i][key[i]] = ind;
-                    }
-                    ind.Add(idx);
-                }
-            }
+        IEnumerator<TValue> IEnumerable<TValue>.GetEnumerator()
+        {
+            return EnumerateValues().GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return EnumerateValues().GetEnumerator();
         }
 
         public TValue this[T1 key1, T2 key2, T3 key3]
@@ -1490,25 +2285,11 @@ namespace TableCollections
                 ExceptionHandling.ThrowIfNull(key1, nameof(key1));
                 ExceptionHandling.ThrowIfNull(key2, nameof(key2));
                 ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-                if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
-                    throw new ArgumentException($"Key not found {key1}");
-                if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
-                    throw new ArgumentException($"Key not found {key2}");
-                if (!_indices[2].TryGetValue(key3, out var indices3) || indices3.Count == 0)
-                    throw new ArgumentException($"Key not found {key3}");
-                var index = -1;
-                var indices = GetCollapsedIndexsetOrDefault();
-                if (indices != null)
+                if (!_fullIndex.TryGetValue(ArrayTuple.From(_collapsedKeys, key1, key2, key3), out var index))
                 {
-                    indices.IntersectWith(indices1);
-                    indices.IntersectWith(indices2);
-                    indices.IntersectWith(indices3);
-                    index = indices.Single();
+                    throw new ArgumentException($"Key combination {(key1, key2, key3)} not found");
                 }
-                else
-                {
-                    index = indices1.Intersect(indices2).Intersect(indices3).Single();
-                }
+
                 return _data[index];
             }
             set
@@ -1516,64 +2297,54 @@ namespace TableCollections
                 ExceptionHandling.ThrowIfNull(key1, nameof(key1));
                 ExceptionHandling.ThrowIfNull(key2, nameof(key2));
                 ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-                var tuple = (ITuple)(key1, key2, key3);
-                var index = -1;
-                var indices = GetCollapsedIndexsetOrDefault();
-                if (indices != null)
-                {
-                    for (var i = 0; i < tuple.Length; i++)
-                    {
-                        if (!_indices[i].TryGetValue(tuple[i], out var ind))
-                        {
-                            ind = new HashSet<int>();
-                            _indices[i][tuple[i]] = ind;
-                        }
-                        indices.IntersectWith(ind);
-                    }
-                    if (indices.Count > 0)
-                        index = indices.Single();
-                }
-                else
-                {
-                    IEnumerable<int> filtered = null;
-                    for (var i = 0; i < tuple.Length; i++)
-                    {
-                        if (!_indices[i].TryGetValue(tuple[i], out var ind))
-                        {
-                            ind = new HashSet<int>();
-                            _indices[i][tuple[i]] = ind;
-                        }
-                        filtered = filtered == null ? ind : filtered.Intersect(ind);
-                    }
-                    foreach (var i in filtered ?? Enumerable.Empty<int>())
-                    {
-                        if (index != -1) throw new InvalidOperationException(); // Single() for non-negative enumerable
-                        index = i;
-                    }
-                }
+
+                var tupKey = ArrayTuple.From(_collapsedKeys, key1, key2, key3);
+                if (!_fullIndex.TryGetValue(tupKey, out var index))
+                    index = -1;
                 if (index < 0)
                 {
+                    if (!_indices1.TryGetValue(key1, out var indices1))
+                    {
+                        indices1 = new HashSet<int>();
+                        _indices1[key1] = indices1;
+                    }
+                    if (!_indices2.TryGetValue(key2, out var indices2))
+                    {
+                        indices2 = new HashSet<int>();
+                        _indices2[key2] = indices2;
+                    }
+                    if (!_indices3.TryGetValue(key3, out var indices3))
+                    {
+                        indices3 = new HashSet<int>();
+                        _indices3[key3] = indices3;
+                    }
                     if (_unusedIndices.Count > 0)
                     {
                         // reuse an unused index
                         index = _unusedIndices.First();
                         _unusedIndices.Remove(index);
                         _data[index] = value;
+                        _keys1[index] = key1;
+                        _keys2[index] = key2;
+                        _keys3[index] = key3;
                     }
                     else
                     {
                         // make an insert at the end
                         index = _data.Count;
-                        _data.Insert(index, value);
+                        _data.Add(value);
+                        _keys1.Add(key1);
+                        _keys2.Add(key2);
+                        _keys3.Add(key3);
                     }
-                    for (var i = 0; i < tuple.Length; i++)
-                    {
-                        _indices[i][tuple[i]].Add(index);
-                    }
+                    _fullIndex[tupKey] = index;
+                    indices1.Add(index);
+                    indices2.Add(index);
+                    indices3.Add(index);
                     // the data needs to be added to all collapsed dimensions
                     foreach (var f in _collapsedKeys)
                     {
-                        f.Add(index);
+                        f.Item2.Add(index);
                     }
                 }
                 else
@@ -1599,20 +2370,24 @@ namespace TableCollections
 
         public int Remove1(T1 key1)
         {
-            if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
+            if (!_indices1.TryGetValue(key1, out var indices1) || indices1.Count == 0)
                 return 0;
+            foreach (var index in indices1)
+            {
+                var key = ArrayTuple.From(_collapsedKeys, _keys1[index], _keys2[index], _keys3[index]);
+                _fullIndex.Remove(key);
+            }
             foreach (var indices in _collapsedKeys)
+            {
+                indices.Item2.ExceptWith(indices1);
+            }
+            foreach (var indices in _indices2.Values)
             {
                 indices.ExceptWith(indices1);
             }
-            foreach (var dict in _indices)
+            foreach (var indices in _indices3.Values)
             {
-                foreach (var indices in dict.Values)
-                {
-                    if (indices == indices1)
-                        continue;
-                    indices.ExceptWith(indices1);
-                }
+                indices.ExceptWith(indices1);
             }
             var removed = indices1.Count;
             _unusedIndices.UnionWith(indices1);
@@ -1623,20 +2398,24 @@ namespace TableCollections
 
         public int Remove2(T2 key2)
         {
-            if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
+            if (!_indices2.TryGetValue(key2, out var indices2) || indices2.Count == 0)
                 return 0;
+            foreach (var index in indices2)
+            {
+                var key = ArrayTuple.From(_collapsedKeys, _keys1[index], _keys2[index], _keys3[index]);
+                _fullIndex.Remove(key);
+            }
             foreach (var indices in _collapsedKeys)
+            {
+                indices.Item2.ExceptWith(indices2);
+            }
+            foreach (var indices in _indices1.Values)
             {
                 indices.ExceptWith(indices2);
             }
-            foreach (var dict in _indices)
+            foreach (var indices in _indices3.Values)
             {
-                foreach (var indices in dict.Values)
-                {
-                    if (indices == indices2)
-                        continue;
-                    indices.ExceptWith(indices2);
-                }
+                indices.ExceptWith(indices2);
             }
             var removed = indices2.Count;
             _unusedIndices.UnionWith(indices2);
@@ -1647,20 +2426,24 @@ namespace TableCollections
 
         public int Remove3(T3 key3)
         {
-            if (!_indices[2].TryGetValue(key3, out var indices3) || indices3.Count == 0)
+            if (!_indices3.TryGetValue(key3, out var indices3) || indices3.Count == 0)
                 return 0;
+            foreach (var index in indices3)
+            {
+                var key = ArrayTuple.From(_collapsedKeys, _keys1[index], _keys2[index], _keys3[index]);
+                _fullIndex.Remove(key);
+            }
             foreach (var indices in _collapsedKeys)
+            {
+                indices.Item2.ExceptWith(indices3);
+            }
+            foreach (var indices in _indices1.Values)
             {
                 indices.ExceptWith(indices3);
             }
-            foreach (var dict in _indices)
+            foreach (var indices in _indices2.Values)
             {
-                foreach (var indices in dict.Values)
-                {
-                    if (indices == indices3)
-                        continue;
-                    indices.ExceptWith(indices3);
-                }
+                indices.ExceptWith(indices3);
             }
             var removed = indices3.Count;
             _unusedIndices.UnionWith(indices3);
@@ -1675,64 +2458,55 @@ namespace TableCollections
         public bool TryGetValue(T1 key1, T2 key2, T3 key3, out TValue? value)
 #endif
         {
-            value = default;
-            if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
+            if (!_fullIndex.TryGetValue(ArrayTuple.From(_collapsedKeys, key1, key2, key3), out var index))
+            {
+                value = default;
                 return false;
-            if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
-                return false;
-            if (!_indices[2].TryGetValue(key3, out var indices3) || indices3.Count == 0)
-                return false;
-
-            var indices = GetCollapsedIndexsetOrDefault();
-            if (indices == null) indices = new HashSet<int>(indices1);
-            else indices.IntersectWith(indices1);
-            indices.IntersectWith(indices2);
-            indices.IntersectWith(indices3);
-            if (indices.Count != 1) return false;
-            value = _data[indices.Single()];
+            }
+            value = _data[index];
             return true;
         }
 
         public MultiKeyDictionary<T2, T3, TValue> Slice1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
-            {
-                throw new ArgumentException($"Key not found {key1}");
-            }
+            var ind = _indices1[key1];
+            if (ind.Count == 0) throw new ArgumentException($"key {key1} not found", nameof(key1));
             return new MultiKeyDictionary<T2, T3, TValue>(
-                new[] { _indices[1], _indices[2] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
+                _indices2, _indices3,
+                _fullIndex,
+                _data, _keys2, _keys3,
+                _collapsedKeys.Concat(new[] { ((object)key1, ind, 0) }).ToList(), _unusedIndices);
         }
 
         public MultiKeyDictionary<T1, T3, TValue> Slice2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
-            {
-                throw new ArgumentException($"Key not found {key2}");
-            }
+            var ind = _indices2[key2];
+            if (ind.Count == 0) throw new ArgumentException($"key {key2} not found", nameof(key2));
             return new MultiKeyDictionary<T1, T3, TValue>(
-                new[] { _indices[0], _indices[2] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
+                _indices1, _indices3,
+                _fullIndex,
+                _data, _keys1, _keys3,
+                _collapsedKeys.Concat(new[] { ((object)key2, ind, 1) }).ToList(), _unusedIndices);
         }
 
         public MultiKeyDictionary<T1, T2, TValue> Slice3(T3 key3)
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-            if (!_indices[2].TryGetValue(key3, out var ind) || ind.Count == 0)
-            {
-                throw new ArgumentException($"Key not found {key3}");
-            }
+            var ind = _indices3[key3];
+            if (ind.Count == 0) throw new ArgumentException($"key {key3} not found", nameof(key3));
             return new MultiKeyDictionary<T1, T2, TValue>(
-                new[] { _indices[0], _indices[1] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
+                _indices1, _indices2,
+                _fullIndex,
+                _data, _keys1, _keys2,
+                _collapsedKeys.Concat(new[] { ((object)key3, ind, 2) }).ToList(), _unusedIndices);
         }
 
         public bool ContainsKey1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
+            if (!_indices1.TryGetValue(key1, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -1751,7 +2525,7 @@ namespace TableCollections
         public bool ContainsKey2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
+            if (!_indices2.TryGetValue(key2, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -1770,7 +2544,7 @@ namespace TableCollections
         public bool ContainsKey3(T3 key3)
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-            if (!_indices[2].TryGetValue(key3, out var ind) || ind.Count == 0)
+            if (!_indices3.TryGetValue(key3, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -1793,10 +2567,9 @@ namespace TableCollections
 #endif
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (_indices[0].TryGetValue(key1, out var indices) && indices.Count > 0)
+            if (_indices1.TryGetValue(key1, out var indices) && indices.Count > 0)
             {
-                values = new MultiKeyDictionary<T2, T3, TValue>(new[] { _indices[1], _indices[2] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
+                values = Slice1(key1);
                 return true;
             }
             values = default;
@@ -1810,10 +2583,9 @@ namespace TableCollections
 #endif
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (_indices[1].TryGetValue(key2, out var indices) && indices.Count > 0)
+            if (_indices2.TryGetValue(key2, out var indices) && indices.Count > 0)
             {
-                values = new MultiKeyDictionary<T1, T3, TValue>(new[] { _indices[0], _indices[2] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
+                values = Slice2(key2);
                 return true;
             }
             values = default;
@@ -1827,10 +2599,9 @@ namespace TableCollections
 #endif
         {
             ExceptionHandling.ThrowIfNull(key3, nameof(key3));
-            if (_indices[2].TryGetValue(key3, out var indices) && indices.Count > 0)
+            if (_indices3.TryGetValue(key3, out var indices) && indices.Count > 0)
             {
-                values = new MultiKeyDictionary<T1, T2, TValue>(new[] { _indices[0], _indices[1] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
+                values = Slice3(key3);
                 return true;
             }
             values = default;
@@ -1840,87 +2611,343 @@ namespace TableCollections
         public IEnumerable<(T1, T2, T3, TValue)> Enumerate()
         {
             var collapsedIndices = GetCollapsedIndexsetOrDefault();
-            IEnumerable<(T1, int)> result1 = (collapsedIndices != null
-                ? _indices[0].Select(x => x.Value.Where(y => collapsedIndices.Contains(y)).Select(y => ((T1)x.Key, y))).SelectMany(x => x)
-                : _indices[0].Select(x => x.Value.Select(y => ((T1)x.Key, y))).SelectMany(x => x)).OrderBy(x => x.Item2);
-            IEnumerable<(T2, int)> result2 = (collapsedIndices != null
-                ? _indices[1].Select(x => x.Value.Where(y => collapsedIndices.Contains(y)).Select(y => ((T2)x.Key, y))).SelectMany(x => x)
-                : _indices[1].Select(x => x.Value.Select(y => ((T2)x.Key, y))).SelectMany(x => x)).OrderBy(x => x.Item2);
-            IEnumerable<(T3, int)> result3 = (collapsedIndices != null
-                ? _indices[2].Select(x => x.Value.Where(y => collapsedIndices.Contains(y)).Select(y => ((T3)x.Key, y))).SelectMany(x => x)
-                : _indices[2].Select(x => x.Value.Select(y => ((T3)x.Key, y))).SelectMany(x => x)).OrderBy(x => x.Item2);
-            var r1Iter = result1.GetEnumerator();
-            var r2Iter = result2.GetEnumerator();
-            var r3Iter = result3.GetEnumerator();
-            while (r1Iter.MoveNext())
+            if (collapsedIndices != null)
             {
-#if DEBUG
-                if (!r2Iter.MoveNext()) throw new InvalidOperationException();
-                if (r2Iter.Current.Item2 != r1Iter.Current.Item2) throw new InvalidOperationException();
-                if (!r3Iter.MoveNext()) throw new InvalidOperationException();
-                if (r3Iter.Current.Item2 != r1Iter.Current.Item2) throw new InvalidOperationException();
-#else
-                r2Iter.MoveNext();
-                r3Iter.MoveNext();
-#endif
-                yield return ((T1)r1Iter.Current.Item1, (T2)r2Iter.Current.Item1, (T3)r3Iter.Current.Item1, _data[r1Iter.Current.Item2]);
+                foreach (var i in collapsedIndices)
+                {
+                    yield return ((T1)_keys1[i], (T2)_keys2[i], (T3)_keys3[i], _data[i]);
+                }
+            }
+            else
+            {
+                for (var i = 0; i < _data.Count; i++)
+                {
+                    if (!_unusedIndices.Contains(i))
+                        yield return ((T1)_keys1[i], (T2)_keys2[i], (T3)_keys3[i], _data[i]);
+                }
             }
         }
-        
+
         public Dictionary<(T1, T2, T3), TValue> ToDictionary() => Enumerate().ToDictionary(x => (x.Item1, x.Item2, x.Item3), x => x.Item4);
     }
 
-    public class MultiKeyDictionary<T1, T2, TValue> : MultiKeyDictionary<TValue>
+    public class MultiKeyDictionary<T1, T2, TValue> : IEnumerable<TValue>
 #if !(NET472 || NET481)
         where T1 : notnull
         where T2 : notnull
 #endif
     {
+        private IDictionary<T1, ISet<int>> _indices1;
+        private IDictionary<T2, ISet<int>> _indices2;
+        private IDictionary<ArrayTuple, int> _fullIndex;
+        private IList<TValue> _data;
+        private IList<T1> _keys1;
+        private IList<T2> _keys2;
+        private IList<(object, ISet<int>, int)> _collapsedKeys;
+        private ISet<int> _unusedIndices;
 
-        protected internal MultiKeyDictionary(IList<IDictionary<object, ISet<int>>> indices,
-            IList<TValue> data, IList<ISet<int>> collapsedKeys, ISet<int> unusedIndices) : base(indices, data, collapsedKeys, unusedIndices) { }
+        /// <summary>
+        /// Removals do not actually remove data from the table, but just delete the index.
+        /// If a lot of Remove operations are performed, the table will become very sparsely populated with actual data.
+        /// This setting controls the absolute number of unused indices that will trigger a compaction.
+        /// Both this and the relative threshold must be met for a compaction to occur.
+        /// </summary>
+        /// <value>The number of unused indices before a compaction is performed.</value>
+        public int CompactingAbsoluteThreshold { get; set; } = 1000;
+        /// <summary>
+        /// Removals do not actually remove data from the table, but just delete the index.
+        /// If a lot of Remove operations are performed, the table will become very sparsely populated with actual data.
+        /// This setting controls the relative number of unused indices that will trigger a compaction.
+        /// Both this and the absolute threshold must be met for a compaction to occur.
+        /// </summary>
+        /// <value>The relative number of unused indices (relative to the full size of the array) before a compaction is performed.</value>
+        public double CompactingRelativeThreshold { get; set; } = 0.01;
+
+
+        protected internal MultiKeyDictionary(IDictionary<T1, ISet<int>> indices1,
+            IDictionary<T2, ISet<int>> indices2,
+            IDictionary<ArrayTuple, int> fullIndex, IList<TValue> data,
+            IList<T1> keys1, IList<T2> keys2,
+            IList<(object, ISet<int>, int)> collapsedKeys, ISet<int> unusedIndices)
+        {
+            _indices1 = indices1;
+            _indices2 = indices2;
+            _fullIndex = fullIndex;
+            _data = data;
+            _keys1 = keys1;
+            _keys2 = keys2;
+            _collapsedKeys = collapsedKeys;
+            _unusedIndices = unusedIndices;
+        }
         public MultiKeyDictionary() : this(new KeyValuePair<(T1, T2), TValue>[0]) { }
         public MultiKeyDictionary(IEnumerable<KeyValuePair<(T1, T2), TValue>> data)
+            : this(data.Select(x => (x.Key.Item1, x.Key.Item2, x.Value))) { }
+        public MultiKeyDictionary(IEnumerable<(T1, T2, TValue)> data)
         {
-            for (var i = 0; i < 2; i++)
-                _indices.Add(new Dictionary<object, ISet<int>>());
+            _indices1 = new Dictionary<T1, ISet<int>>();
+            _indices2 = new Dictionary<T2, ISet<int>>();
+            _fullIndex = new Dictionary<ArrayTuple, int>(100);
+            _data = new List<TValue>(100);
+            _keys1 = new List<T1>(100);
+            _keys2 = new List<T2>(100);
+            _collapsedKeys = new List<(object, ISet<int>, int)>();
+            _unusedIndices = new HashSet<int>();
 
             var idx = -1;
             foreach (var d in data)
             {
-                _data.Insert(++idx, d.Value);
-                var key = (ITuple)d.Key;
-                for (var i = 0; i < key.Length; i++)
+                ++idx;
+                var (key1, key2, val) = d;
+                _data.Add(val);
+                _fullIndex[ArrayTuple.From(key1, key2)] = idx;
+                _keys1.Add(key1);
+                _keys2.Add(key2);
+                if (!_indices1.TryGetValue(key1, out var ind1))
                 {
-                    if (!_indices[i].TryGetValue(key[i], out var ind))
+                    ind1 = new HashSet<int>();
+                    _indices1[key1] = ind1;
+                }
+                ind1.Add(idx);
+                if (!_indices2.TryGetValue(key2, out var ind2))
+                {
+                    ind2 = new HashSet<int>();
+                    _indices2[key2] = ind2;
+                }
+                ind2.Add(idx);
+            }
+        }
+
+        public int Count => GetCollapsedIndexsetOrDefault()?.Count ?? (_data.Count - _unusedIndices.Count);
+
+        /// <summary>
+        /// Sets *all* values in the table (respectively the slice) to the given value
+        /// </summary>
+        /// <param name="value"></param>
+        public void Set(TValue value)
+        {
+            var collapsedIndices = GetCollapsedIndexsetOrDefault();
+            if (collapsedIndices == null)
+            {
+                // set all values
+                for (var i = 0; i < _data.Count; i++)
+                {
+                    // This method also overrides unused indices *shrug*
+                    _data[i] = value;
+                }
+            }
+            else
+            {
+                // set those values that are in the slice
+                foreach (var index in collapsedIndices)
+                    _data[index] = value;
+            }
+        }
+
+        public bool Remove(T1 key1, T2 key2)
+        {
+            ExceptionHandling.ThrowIfNull(key1, nameof(key1));
+            ExceptionHandling.ThrowIfNull(key2, nameof(key2));
+
+            var key = ArrayTuple.From(_collapsedKeys, key1, key2);
+            if (!_fullIndex.TryGetValue(key, out var index))
+            {
+                return false;
+            }
+            _fullIndex.Remove(key);
+            _unusedIndices.Add(index);
+            _data[index] = default;
+            _keys1[index] = default;
+            _keys2[index] = default;
+            for (var i = 0; i < _collapsedKeys.Count; i++)
+            {
+                _collapsedKeys[i].Item2.Remove(index); // we don't need to manipulate all indices > index, because we don't remove above
+            }
+            _indices1[key1].Remove(index);
+            _indices2[key2].Remove(index);
+            CheckCompact();
+            return true;
+        }
+
+        public void Clear()
+        {
+            var collapsed = GetCollapsedIndexsetOrDefault();
+            if (collapsed == null)
+            {
+                _fullIndex.Clear();
+                _data.Clear();
+                _keys1.Clear();
+                _keys2.Clear();
+                _unusedIndices.Clear();
+                foreach (var indices in _indices1.Values)
+                {
+                    indices.Clear();
+                }
+                foreach (var indices in _indices2.Values)
+                {
+                    indices.Clear();
+                }
+                foreach (var indices in _collapsedKeys)
+                {
+                    indices.Item2.Clear();
+                }
+            }
+            else
+            {
+                foreach (var ind in collapsed)
+                {
+                    var key = ArrayTuple.From(_collapsedKeys, _keys1[ind], _keys2[ind]);
+                    _fullIndex.Remove(key);
+                }
+                foreach (var indices in _indices1.Values)
+                {
+                    indices.ExceptWith(collapsed);
+                }
+                foreach (var indices in _indices2.Values)
+                {
+                    indices.ExceptWith(collapsed);
+                }
+                foreach (var indices in _collapsedKeys)
+                {
+                    indices.Item2.ExceptWith(collapsed);
+                }
+                // declare the indices unused and then compact
+                _unusedIndices.UnionWith(collapsed);
+                Compact();
+            }
+        }
+
+        protected void CheckCompact()
+        {
+            if (_unusedIndices.Count > CompactingAbsoluteThreshold
+                && _unusedIndices.Count > _data.Count * CompactingRelativeThreshold)
+                Compact();
+        }
+
+        private void Compact()
+        {
+            if (_unusedIndices.Count == 0) return;
+            var sequence = _unusedIndices.OrderByDescending(x => x).ToList();
+            var offsets = new Dictionary<int, int>();
+            var offset = 0;
+            var offsetIndex = 0;
+            for (var i = sequence.Count - 1; i >= 0; i--)
+            {
+                var index = sequence[i];
+                if (offset > 0)
+                {
+                    for (var o = offsetIndex; o < index; o++)
                     {
-                        ind = new HashSet<int>();
-                        _indices[i][key[i]] = ind;
+                        offsets[o] = offset;
                     }
-                    ind.Add(idx);
+                }
+                offsetIndex = index;
+                offset++;
+                _data.RemoveAt(sequence[sequence.Count - 1 - i]);
+                _keys1.RemoveAt(sequence[sequence.Count - 1 - i]);
+                _keys2.RemoveAt(sequence[sequence.Count - 1 - i]);
+            }
+            for (var o = offsetIndex; o < _data.Count + offset; o++)
+            {
+                offsets[o] = offset;
+            }
+            foreach (var kvp in _fullIndex.ToArray())
+            {
+                if (offsets.TryGetValue(kvp.Value, out var off))
+                {
+                    _fullIndex[kvp.Key] = kvp.Value - off;
+                }
+            }
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.Item2.ExceptWith(_unusedIndices);
+                var reindex = indices.Item2.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
+                {
+                    indices.Item2.ExceptWith(reindex.Select(x => x.index));
+                    indices.Item2.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            foreach (var kvp in _indices1)
+            {
+                var key = kvp.Key;
+                var indices = kvp.Value;
+                indices.ExceptWith(_unusedIndices);
+                var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
+                {
+                    indices.ExceptWith(reindex.Select(x => x.index));
+                    indices.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            foreach (var kvp in _indices2)
+            {
+                var key = kvp.Key;
+                var indices = kvp.Value;
+                indices.ExceptWith(_unusedIndices);
+                var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
+                {
+                    indices.ExceptWith(reindex.Select(x => x.index));
+                    indices.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            _unusedIndices.Clear();
+        }
+
+        public bool Contains(T1 key1, T2 key2)
+        {
+            return _fullIndex.ContainsKey(ArrayTuple.From(_collapsedKeys, key1, key2));
+        }
+
+#if NET472 || NET481
+        protected ISet<int> GetCollapsedIndexsetOrDefault()
+        {
+            HashSet<int> collapsedIndices = null;
+#else
+        protected ISet<int>? GetCollapsedIndexsetOrDefault()
+        {
+            HashSet<int>? collapsedIndices = null;
+#endif
+            if (_collapsedKeys.Count > 0)
+            {
+                foreach (var collapsedSet in _collapsedKeys.Select(x => x.Item2).OrderBy(x => x.Count))
+                {
+                    if (collapsedIndices == null)
+                        collapsedIndices = new HashSet<int>(collapsedSet);
+                    else collapsedIndices.IntersectWith(collapsedSet);
+                }
+            }
+            return collapsedIndices;
+        }
+
+        public IEnumerable<TValue> EnumerateValues()
+        {
+            var collapsedIndices = GetCollapsedIndexsetOrDefault();
+            if (collapsedIndices == null)
+            {
+                for (var i = 0; i < _data.Count; i++)
+                {
+                    if (!_unusedIndices.Contains(i))
+                        yield return _data[i];
+                }
+            }
+            else
+            {
+                foreach (var index in collapsedIndices)
+                {
+                    yield return _data[index];
                 }
             }
         }
-        public MultiKeyDictionary(IEnumerable<(T1, T2, TValue)> data)
-        {
-            for (var i = 0; i < 2; i++)
-                _indices.Add(new Dictionary<object, ISet<int>>());
 
-            var idx = -1;
-            foreach (var d in data)
-            {
-                _data.Insert(++idx, d.Item3);
-                var key = (ITuple)d;
-                for (var i = 0; i < key.Length - 1; i++)
-                {
-                    if (!_indices[i].TryGetValue(key[i], out var ind))
-                    {
-                        ind = new HashSet<int>();
-                        _indices[i][key[i]] = ind;
-                    }
-                    ind.Add(idx);
-                }
-            }
+        IEnumerator<TValue> IEnumerable<TValue>.GetEnumerator()
+        {
+            return EnumerateValues().GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return EnumerateValues().GetEnumerator();
         }
 
         public TValue this[T1 key1, T2 key2]
@@ -1929,86 +2956,57 @@ namespace TableCollections
             {
                 ExceptionHandling.ThrowIfNull(key1, nameof(key1));
                 ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-                if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
-                    throw new ArgumentException($"Key not found {key1}");
-                if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
-                    throw new ArgumentException($"Key not found {key2}");
-                var index = -1;
-                var indices = GetCollapsedIndexsetOrDefault();
-                if (indices != null)
+                if (!_fullIndex.TryGetValue(ArrayTuple.From(_collapsedKeys, key1, key2), out var index))
                 {
-                    indices.IntersectWith(indices1);
-                    indices.IntersectWith(indices2);
-                    index = indices.Single();
+                    throw new ArgumentException($"Key combination {(key1, key2)} not found");
                 }
-                else
-                {
-                    index = indices1.Intersect(indices2).Single();
-                }
+
                 return _data[index];
             }
             set
             {
                 ExceptionHandling.ThrowIfNull(key1, nameof(key1));
                 ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-                var tuple = (ITuple)(key1, key2);
-                var index = -1;
-                var indices = GetCollapsedIndexsetOrDefault();
-                if (indices != null)
-                {
-                    for (var i = 0; i < tuple.Length; i++)
-                    {
-                        if (!_indices[i].TryGetValue(tuple[i], out var ind))
-                        {
-                            ind = new HashSet<int>();
-                            _indices[i][tuple[i]] = ind;
-                        }
-                        indices.IntersectWith(ind);
-                    }
-                    if (indices.Count > 0)
-                        index = indices.Single();
-                }
-                else
-                {
-                    IEnumerable<int> filtered = null;
-                    for (var i = 0; i < tuple.Length; i++)
-                    {
-                        if (!_indices[i].TryGetValue(tuple[i], out var ind))
-                        {
-                            ind = new HashSet<int>();
-                            _indices[i][tuple[i]] = ind;
-                        }
-                        filtered = filtered == null ? ind : filtered.Intersect(ind);
-                    }
-                    foreach (var i in filtered ?? Enumerable.Empty<int>())
-                    {
-                        if (index != -1) throw new InvalidOperationException(); // Single() for non-negative enumerable
-                        index = i;
-                    }
-                }
+
+                var tupKey = ArrayTuple.From(_collapsedKeys, key1, key2);
+                if (!_fullIndex.TryGetValue(tupKey, out var index))
+                    index = -1;
                 if (index < 0)
                 {
+                    if (!_indices1.TryGetValue(key1, out var indices1))
+                    {
+                        indices1 = new HashSet<int>();
+                        _indices1[key1] = indices1;
+                    }
+                    if (!_indices2.TryGetValue(key2, out var indices2))
+                    {
+                        indices2 = new HashSet<int>();
+                        _indices2[key2] = indices2;
+                    }
                     if (_unusedIndices.Count > 0)
                     {
                         // reuse an unused index
                         index = _unusedIndices.First();
                         _unusedIndices.Remove(index);
                         _data[index] = value;
+                        _keys1[index] = key1;
+                        _keys2[index] = key2;
                     }
                     else
                     {
                         // make an insert at the end
                         index = _data.Count;
-                        _data.Insert(index, value);
+                        _data.Add(value);
+                        _keys1.Add(key1);
+                        _keys2.Add(key2);
                     }
-                    for (var i = 0; i < tuple.Length; i++)
-                    {
-                        _indices[i][tuple[i]].Add(index);
-                    }
+                    _fullIndex[tupKey] = index;
+                    indices1.Add(index);
+                    indices2.Add(index);
                     // the data needs to be added to all collapsed dimensions
                     foreach (var f in _collapsedKeys)
                     {
-                        f.Add(index);
+                        f.Item2.Add(index);
                     }
                 }
                 else
@@ -2034,20 +3032,20 @@ namespace TableCollections
 
         public int Remove1(T1 key1)
         {
-            if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
+            if (!_indices1.TryGetValue(key1, out var indices1) || indices1.Count == 0)
                 return 0;
+            foreach (var index in indices1)
+            {
+                var key = ArrayTuple.From(_collapsedKeys, _keys1[index], _keys2[index]);
+                _fullIndex.Remove(key);
+            }
             foreach (var indices in _collapsedKeys)
             {
-                indices.ExceptWith(indices1);
+                indices.Item2.ExceptWith(indices1);
             }
-            foreach (var dict in _indices)
+            foreach (var indices in _indices2.Values)
             {
-                foreach (var indices in dict.Values)
-                {
-                    if (indices == indices1)
-                        continue;
-                    indices.ExceptWith(indices1);
-                }
+                indices.ExceptWith(indices1);
             }
             var removed = indices1.Count;
             _unusedIndices.UnionWith(indices1);
@@ -2058,20 +3056,20 @@ namespace TableCollections
 
         public int Remove2(T2 key2)
         {
-            if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
+            if (!_indices2.TryGetValue(key2, out var indices2) || indices2.Count == 0)
                 return 0;
+            foreach (var index in indices2)
+            {
+                var key = ArrayTuple.From(_collapsedKeys, _keys1[index], _keys2[index]);
+                _fullIndex.Remove(key);
+            }
             foreach (var indices in _collapsedKeys)
             {
-                indices.ExceptWith(indices2);
+                indices.Item2.ExceptWith(indices2);
             }
-            foreach (var dict in _indices)
+            foreach (var indices in _indices1.Values)
             {
-                foreach (var indices in dict.Values)
-                {
-                    if (indices == indices2)
-                        continue;
-                    indices.ExceptWith(indices2);
-                }
+                indices.ExceptWith(indices2);
             }
             var removed = indices2.Count;
             _unusedIndices.UnionWith(indices2);
@@ -2086,49 +3084,43 @@ namespace TableCollections
         public bool TryGetValue(T1 key1, T2 key2, out TValue? value)
 #endif
         {
-            value = default;
-            if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
+            if (!_fullIndex.TryGetValue(ArrayTuple.From(_collapsedKeys, key1, key2), out var index))
+            {
+                value = default;
                 return false;
-            if (!_indices[1].TryGetValue(key2, out var indices2) || indices2.Count == 0)
-                return false;
-
-            var indices = GetCollapsedIndexsetOrDefault();
-            if (indices == null) indices = new HashSet<int>(indices1);
-            else indices.IntersectWith(indices1);
-            indices.IntersectWith(indices2);
-            if (indices.Count != 1) return false;
-            value = _data[indices.Single()];
+            }
+            value = _data[index];
             return true;
         }
 
         public MultiKeyDictionary<T2, TValue> Slice1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
-            {
-                throw new ArgumentException($"Key not found {key1}");
-            }
+            var ind = _indices1[key1];
+            if (ind.Count == 0) throw new ArgumentException($"key {key1} not found", nameof(key1));
             return new MultiKeyDictionary<T2, TValue>(
-                new[] { _indices[1] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
+                _indices2,
+                _fullIndex,
+                _data, _keys2,
+                _collapsedKeys.Concat(new[] { ((object)key1, ind, 0) }).ToList(), _unusedIndices);
         }
 
         public MultiKeyDictionary<T1, TValue> Slice2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
-            {
-                throw new ArgumentException($"Key not found {key2}");
-            }
+            var ind = _indices2[key2];
+            if (ind.Count == 0) throw new ArgumentException($"key {key2} not found", nameof(key2));
             return new MultiKeyDictionary<T1, TValue>(
-                new[] { _indices[0] },
-                _data, _collapsedKeys.Concat(new[] { ind }).ToList(), _unusedIndices);
+                _indices1,
+                _fullIndex,
+                _data, _keys1,
+                _collapsedKeys.Concat(new[] { ((object)key2, ind, 1) }).ToList(), _unusedIndices);
         }
 
         public bool ContainsKey1(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
+            if (!_indices1.TryGetValue(key1, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -2147,7 +3139,7 @@ namespace TableCollections
         public bool ContainsKey2(T2 key2)
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (!_indices[1].TryGetValue(key2, out var ind) || ind.Count == 0)
+            if (!_indices2.TryGetValue(key2, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -2170,10 +3162,9 @@ namespace TableCollections
 #endif
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (_indices[0].TryGetValue(key1, out var indices) && indices.Count > 0)
+            if (_indices1.TryGetValue(key1, out var indices) && indices.Count > 0)
             {
-                values = new MultiKeyDictionary<T2, TValue>(new[] { _indices[1] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
+                values = Slice1(key1);
                 return true;
             }
             values = default;
@@ -2187,10 +3178,9 @@ namespace TableCollections
 #endif
         {
             ExceptionHandling.ThrowIfNull(key2, nameof(key2));
-            if (_indices[1].TryGetValue(key2, out var indices) && indices.Count > 0)
+            if (_indices2.TryGetValue(key2, out var indices) && indices.Count > 0)
             {
-                values = new MultiKeyDictionary<T1, TValue>(new[] { _indices[0] },
-                _data, _collapsedKeys.Concat(new[] { indices }).ToList(), _unusedIndices);
+                values = Slice2(key2);
                 return true;
             }
             values = default;
@@ -2200,69 +3190,298 @@ namespace TableCollections
         public IEnumerable<(T1, T2, TValue)> Enumerate()
         {
             var collapsedIndices = GetCollapsedIndexsetOrDefault();
-            IEnumerable<(T1, int)> result1 = (collapsedIndices != null
-                ? _indices[0].Select(x => x.Value.Where(y => collapsedIndices.Contains(y)).Select(y => ((T1)x.Key, y))).SelectMany(x => x)
-                : _indices[0].Select(x => x.Value.Select(y => ((T1)x.Key, y))).SelectMany(x => x)).OrderBy(x => x.Item2);
-            IEnumerable<(T2, int)> result2 = (collapsedIndices != null
-                ? _indices[1].Select(x => x.Value.Where(y => collapsedIndices.Contains(y)).Select(y => ((T2)x.Key, y))).SelectMany(x => x)
-                : _indices[1].Select(x => x.Value.Select(y => ((T2)x.Key, y))).SelectMany(x => x)).OrderBy(x => x.Item2);
-            var r1Iter = result1.GetEnumerator();
-            var r2Iter = result2.GetEnumerator();
-            while (r1Iter.MoveNext())
+            if (collapsedIndices != null)
             {
-#if DEBUG
-                if (!r2Iter.MoveNext()) throw new InvalidOperationException();
-                if (r1Iter.Current.Item2 != r2Iter.Current.Item2) throw new InvalidOperationException();
-#else
-                r2Iter.MoveNext();
-#endif
-                yield return ((T1)r1Iter.Current.Item1, (T2)r2Iter.Current.Item1, _data[r1Iter.Current.Item2]);
+                foreach (var i in collapsedIndices)
+                {
+                    yield return ((T1)_keys1[i], (T2)_keys2[i], _data[i]);
+                }
+            }
+            else
+            {
+                for (var i = 0; i < _data.Count; i++)
+                {
+                    if (!_unusedIndices.Contains(i))
+                        yield return ((T1)_keys1[i], (T2)_keys2[i], _data[i]);
+                }
             }
         }
-        
+
         public Dictionary<(T1, T2), TValue> ToDictionary() => Enumerate().ToDictionary(x => (x.Item1, x.Item2), x => x.Item3);
     }
 
-    public class MultiKeyDictionary<T1, TValue> : MultiKeyDictionary<TValue>
+    public class MultiKeyDictionary<T1, TValue> : IEnumerable<TValue>
 #if !(NET472 || NET481)
         where T1 : notnull
 #endif
     {
-        protected internal MultiKeyDictionary(IList<IDictionary<object, ISet<int>>> indices,
-            IList<TValue> data, IList<ISet<int>> collapsedKeys, ISet<int> unusedIndices) : base(indices, data, collapsedKeys, unusedIndices) { }
+        private IDictionary<T1, ISet<int>> _indices1;
+        private IDictionary<ArrayTuple, int> _fullIndex;
+        private IList<TValue> _data;
+        private IList<T1> _keys1;
+        private IList<(object, ISet<int>, int)> _collapsedKeys;
+        private ISet<int> _unusedIndices;
+        
+        /// <summary>
+        /// Removals do not actually remove data from the table, but just delete the index.
+        /// If a lot of Remove operations are performed, the table will become very sparsely populated with actual data.
+        /// This setting controls the absolute number of unused indices that will trigger a compaction.
+        /// Both this and the relative threshold must be met for a compaction to occur.
+        /// </summary>
+        /// <value>The number of unused indices before a compaction is performed.</value>
+        public int CompactingAbsoluteThreshold { get; set; } = 1000;
+        /// <summary>
+        /// Removals do not actually remove data from the table, but just delete the index.
+        /// If a lot of Remove operations are performed, the table will become very sparsely populated with actual data.
+        /// This setting controls the relative number of unused indices that will trigger a compaction.
+        /// Both this and the absolute threshold must be met for a compaction to occur.
+        /// </summary>
+        /// <value>The relative number of unused indices (relative to the full size of the array) before a compaction is performed.</value>
+        public double CompactingRelativeThreshold { get; set; } = 0.01;
+
+
+        protected internal MultiKeyDictionary(IDictionary<T1, ISet<int>> indices1,
+            IDictionary<ArrayTuple, int> fullIndex, IList<TValue> data,
+            IList<T1> keys1,
+            IList<(object, ISet<int>, int)> collapsedKeys, ISet<int> unusedIndices)
+        {
+            _indices1 = indices1;
+            _fullIndex = fullIndex;
+            _data = data;
+            _keys1 = keys1;
+            _collapsedKeys = collapsedKeys;
+            _unusedIndices = unusedIndices;
+        }
         public MultiKeyDictionary() : this(new KeyValuePair<T1, TValue>[0]) { }
         public MultiKeyDictionary(IEnumerable<KeyValuePair<T1, TValue>> data)
-        {
-            _indices.Add(new Dictionary<object, ISet<int>>());
-
-            var idx = -1;
-            foreach (var d in data)
-            {
-                _data.Insert(++idx, d.Value);
-                if (!_indices[0].TryGetValue(d.Key, out var ind))
-                {
-                    ind = new HashSet<int>();
-                    _indices[0][d.Key] = ind;
-                }
-                ind.Add(idx);
-            }
-        }
+            : this(data.Select(x => (x.Key, x.Value))) { }
         public MultiKeyDictionary(IEnumerable<(T1, TValue)> data)
         {
-            for (var i = 0; i < 2; i++)
-                _indices.Add(new Dictionary<object, ISet<int>>());
+            _indices1 = new Dictionary<T1, ISet<int>>();
+            _fullIndex = new Dictionary<ArrayTuple, int>(100);
+            _data = new List<TValue>(100);
+            _keys1 = new List<T1>(100);
+            _collapsedKeys = new List<(object, ISet<int>, int)>();
+            _unusedIndices = new HashSet<int>();
 
             var idx = -1;
             foreach (var d in data)
             {
-                _data.Insert(++idx, d.Item2);
-                if (!_indices[0].TryGetValue(d.Item1, out var ind))
+                ++idx;
+                var (key1, val) = d;
+                _data.Add(val);
+                _fullIndex[ArrayTuple.From(key1)] = idx;
+                _keys1.Add(key1);
+                if (!_indices1.TryGetValue(key1, out var ind1))
                 {
-                    ind = new HashSet<int>();
-                    _indices[0][d.Item1] = ind;
+                    ind1 = new HashSet<int>();
+                    _indices1[key1] = ind1;
                 }
-                ind.Add(idx);
+                ind1.Add(idx);
             }
+        }
+
+        public int Count => GetCollapsedIndexsetOrDefault()?.Count ?? (_data.Count - _unusedIndices.Count);
+
+        /// <summary>
+        /// Sets *all* values in the table (respectively the slice) to the given value
+        /// </summary>
+        /// <param name="value"></param>
+        public void Set(TValue value)
+        {
+            var collapsedIndices = GetCollapsedIndexsetOrDefault();
+            if (collapsedIndices == null)
+            {
+                // set all values
+                for (var i = 0; i < _data.Count; i++)
+                {
+                    // This method also overrides unused indices *shrug*
+                    _data[i] = value;
+                }
+            }
+            else
+            {
+                // set those values that are in the slice
+                foreach (var index in collapsedIndices)
+                    _data[index] = value;
+            }
+        }
+
+        public bool Remove(T1 key1)
+        {
+            ExceptionHandling.ThrowIfNull(key1, nameof(key1));
+
+            var key = ArrayTuple.From(_collapsedKeys, key1);
+            if (!_fullIndex.TryGetValue(key, out var index))
+            {
+                return false;
+            }
+            _fullIndex.Remove(key);
+            _unusedIndices.Add(index);
+            _data[index] = default;
+            _keys1[index] = default;
+            for (var i = 0; i < _collapsedKeys.Count; i++)
+            {
+                _collapsedKeys[i].Item2.Remove(index); // we don't need to manipulate all indices > index, because we don't remove above
+            }
+            _indices1[key1].Remove(index);
+            CheckCompact();
+            return true;
+        }
+
+        public void Clear()
+        {
+            var collapsed = GetCollapsedIndexsetOrDefault();
+            if (collapsed == null)
+            {
+                _fullIndex.Clear();
+                _data.Clear();
+                _keys1.Clear();
+                _unusedIndices.Clear();
+                foreach (var indices in _indices1.Values)
+                {
+                    indices.Clear();
+                }
+                foreach (var indices in _collapsedKeys)
+                {
+                    indices.Item2.Clear();
+                }
+            }
+            else
+            {
+                foreach (var ind in collapsed)
+                {
+                    var key = ArrayTuple.From(_collapsedKeys, _keys1[ind]);
+                    _fullIndex.Remove(key);
+                }
+                foreach (var indices in _indices1.Values)
+                {
+                    indices.ExceptWith(collapsed);
+                }
+                foreach (var indices in _collapsedKeys)
+                {
+                    indices.Item2.ExceptWith(collapsed);
+                }
+                // declare the indices unused and then compact
+                _unusedIndices.UnionWith(collapsed);
+                Compact();
+            }
+        }
+
+        protected void CheckCompact()
+        {
+            if (_unusedIndices.Count > CompactingAbsoluteThreshold
+                && _unusedIndices.Count > _data.Count * CompactingRelativeThreshold)
+                Compact();
+        }
+
+        private void Compact()
+        {
+            if (_unusedIndices.Count == 0) return;
+            var sequence = _unusedIndices.OrderByDescending(x => x).ToList();
+            var offsets = new Dictionary<int, int>();
+            var offset = 0;
+            var offsetIndex = 0;
+            for (var i = sequence.Count - 1; i >= 0; i--)
+            {
+                var index = sequence[i];
+                if (offset > 0)
+                {
+                    for (var o = offsetIndex; o < index; o++)
+                    {
+                        offsets[o] = offset;
+                    }
+                }
+                offsetIndex = index;
+                offset++;
+                _data.RemoveAt(sequence[sequence.Count - 1 - i]);
+                _keys1.RemoveAt(sequence[sequence.Count - 1 - i]);
+            }
+            for (var o = offsetIndex; o < _data.Count + offset; o++)
+            {
+                offsets[o] = offset;
+            }
+            foreach (var kvp in _fullIndex.ToArray())
+            {
+                if (offsets.TryGetValue(kvp.Value, out var off))
+                {
+                    _fullIndex[kvp.Key] = kvp.Value - off;
+                }
+            }
+            foreach (var indices in _collapsedKeys)
+            {
+                indices.Item2.ExceptWith(_unusedIndices);
+                var reindex = indices.Item2.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
+                {
+                    indices.Item2.ExceptWith(reindex.Select(x => x.index));
+                    indices.Item2.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            foreach (var kvp in _indices1)
+            {
+                var key = kvp.Key;
+                var indices = kvp.Value;
+                indices.ExceptWith(_unusedIndices);
+                var reindex = indices.Select(x => (index: x, offset: offsets.TryGetValue(x, out var o) ? o : 0)).Where(x => x.offset > 0).ToList();
+                if (reindex.Count > 0)
+                {
+                    indices.ExceptWith(reindex.Select(x => x.index));
+                    indices.UnionWith(reindex.Select(x => x.index - x.offset));
+                }
+            }
+            _unusedIndices.Clear();
+        }
+
+#if NET472 || NET481
+        protected ISet<int> GetCollapsedIndexsetOrDefault()
+        {
+            HashSet<int> collapsedIndices = null;
+#else
+        protected ISet<int>? GetCollapsedIndexsetOrDefault()
+        {
+            HashSet<int>? collapsedIndices = null;
+#endif
+            if (_collapsedKeys.Count > 0)
+            {
+                foreach (var collapsedSet in _collapsedKeys.Select(x => x.Item2).OrderBy(x => x.Count))
+                {
+                    if (collapsedIndices == null)
+                        collapsedIndices = new HashSet<int>(collapsedSet);
+                    else collapsedIndices.IntersectWith(collapsedSet);
+                }
+            }
+            return collapsedIndices;
+        }
+
+        public IEnumerable<TValue> EnumerateValues()
+        {
+            var collapsedIndices = GetCollapsedIndexsetOrDefault();
+            if (collapsedIndices == null)
+            {
+                for (var i = 0; i < _data.Count; i++)
+                {
+                    if (!_unusedIndices.Contains(i))
+                        yield return _data[i];
+                }
+            }
+            else
+            {
+                foreach (var index in collapsedIndices)
+                {
+                    yield return _data[index];
+                }
+            }
+        }
+
+        IEnumerator<TValue> IEnumerable<TValue>.GetEnumerator()
+        {
+            return EnumerateValues().GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return EnumerateValues().GetEnumerator();
         }
 
         public TValue this[T1 key1]
@@ -2270,55 +3489,48 @@ namespace TableCollections
             get
             {
                 ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-                if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
-                    throw new ArgumentException($"Key not found {key1}");
-                IEnumerable<int> filtered = indices1;
-                foreach (var ck in _collapsedKeys)
-                    filtered = filtered.Intersect(ck);
-                var index = filtered.Single();
+                if (!_fullIndex.TryGetValue(ArrayTuple.From(_collapsedKeys, key1), out var index))
+                {
+                    throw new ArgumentException($"Key combination {(key1)} not found");
+                }
+
                 return _data[index];
             }
             set
             {
                 ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-                if (!_indices[0].TryGetValue(key1, out var ind))
-                {
-                    ind = new HashSet<int>();
-                    _indices[0][key1] = ind;
-                }
-#if NET472 || NET481
-                IEnumerable<int> filtered = ind;
-#else
-                IEnumerable<int>? filtered = ind;
-#endif
-                foreach (var ck in _collapsedKeys)
-                    filtered = filtered.Intersect(ck);
-                var index = -1;
-                foreach (var i in filtered)
-                {
-                    if (index != -1) throw new InvalidOperationException();
-                    index = i;
-                }
+
+                var tupKey = ArrayTuple.From(_collapsedKeys, key1);
+                if (!_fullIndex.TryGetValue(tupKey, out var index))
+                    index = -1;
                 if (index < 0)
                 {
+                    if (!_indices1.TryGetValue(key1, out var indices1))
+                    {
+                        indices1 = new HashSet<int>();
+                        _indices1[key1] = indices1;
+                    }
                     if (_unusedIndices.Count > 0)
                     {
                         // reuse an unused index
                         index = _unusedIndices.First();
                         _unusedIndices.Remove(index);
                         _data[index] = value;
+                        _keys1[index] = key1;
                     }
                     else
                     {
                         // make an insert at the end
                         index = _data.Count;
-                        _data.Insert(index, value);
+                        _data.Add(value);
+                        _keys1.Add(key1);
                     }
-                    _indices[0][key1].Add(index);
+                    _fullIndex[tupKey] = index;
+                    indices1.Add(index);
                     // the data needs to be added to all collapsed dimensions
                     foreach (var f in _collapsedKeys)
                     {
-                        f.Add(index);
+                        f.Item2.Add(index);
                     }
                 }
                 else
@@ -2330,7 +3542,7 @@ namespace TableCollections
 
         public void Add(T1 key1, TValue value)
         {
-            if (ContainsKey(key1)) throw new ArgumentException($"Key already exists {key1}");
+            if (Contains(key1)) throw new ArgumentException($"Key already exists ({key1})");
             this[key1] = value;
         }
 
@@ -2340,22 +3552,19 @@ namespace TableCollections
         public bool TryGetValue(T1 key1, out TValue? value)
 #endif
         {
-            value = default;
-            if (!_indices[0].TryGetValue(key1, out var indices1) || indices1.Count == 0)
+            if (!_fullIndex.TryGetValue(ArrayTuple.From(_collapsedKeys, key1), out var index))
+            {
+                value = default;
                 return false;
-
-            var indices = GetCollapsedIndexsetOrDefault();
-            if (indices == null) indices = new HashSet<int>(indices1);
-            else indices.IntersectWith(indices1);
-            if (indices.Count != 1) return false;
-            value = _data[indices.Single()];
+            }
+            value = _data[index];
             return true;
         }
 
-        public bool ContainsKey(T1 key1)
+        public bool Contains(T1 key1)
         {
             ExceptionHandling.ThrowIfNull(key1, nameof(key1));
-            if (!_indices[0].TryGetValue(key1, out var ind) || ind.Count == 0)
+            if (!_indices1.TryGetValue(key1, out var ind) || ind.Count == 0)
                 return false;
 
             var indices = GetCollapsedIndexsetOrDefault();
@@ -2371,19 +3580,28 @@ namespace TableCollections
             return true;
         }
 
-        public IEnumerable<(T1, TValue)> Enumerate(bool orderByIndex = true)
+        public bool ContainsKey(T1 key) => Contains(key);
+
+        public IEnumerable<(T1, TValue)> Enumerate()
         {
             var collapsedIndices = GetCollapsedIndexsetOrDefault();
-            IEnumerable<(T1, int)> result = collapsedIndices != null
-                ? _indices[0].Select(x => x.Value.Where(y => collapsedIndices.Contains(y)).Select(y => ((T1)x.Key, y))).SelectMany(x => x)
-                : _indices[0].Select(x => x.Value.Select(y => ((T1)x.Key, y))).SelectMany(x => x);
-            if (orderByIndex) result = result.OrderBy(x => x.Item2);
-            foreach (var r in result)
+            if (collapsedIndices != null)
             {
-                yield return ((T1)r.Item1, _data[r.Item2]);
+                foreach (var i in collapsedIndices)
+                {
+                    yield return ((T1)_keys1[i], _data[i]);
+                }
+            }
+            else
+            {
+                for (var i = 0; i < _data.Count; i++)
+                {
+                    if (!_unusedIndices.Contains(i))
+                        yield return ((T1)_keys1[i], _data[i]);
+                }
             }
         }
 
-        public Dictionary<T1, TValue> ToDictionary() => Enumerate(false).ToDictionary(x => x.Item1, x => x.Item2);
+        public Dictionary<T1, TValue> ToDictionary() => Enumerate().ToDictionary(x => x.Item1, x => x.Item2);
     }
 }

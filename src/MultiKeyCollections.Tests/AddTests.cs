@@ -1,4 +1,4 @@
-namespace TableCollections.Tests;
+namespace MultiKeyCollections.Tests;
 
 using Xunit;
 

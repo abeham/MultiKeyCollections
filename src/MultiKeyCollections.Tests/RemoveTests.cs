@@ -1,6 +1,6 @@
 using Xunit;
 
-namespace TableCollections.Tests;
+namespace MultiKeyCollections.Tests;
 
 public class RemoveTests
 {
@@ -20,20 +20,28 @@ public class RemoveTests
 
         Assert.True(dict5.Remove("a1", "b1", "c1", "d1", "e1"));
         Assert.Equal(8, dict5.Count);
+        Assert.Equal(8, dict5.Enumerate().Count());
+        Assert.Equal(8, dict5.EnumerateValues().Count());
         Assert.False(dict5.Contains("a1", "b1", "c1", "d1", "e1"));
         Assert.False(dict5.Remove("a1", "b1", "c1", "d1", "e1"));
         Assert.True(dict5.Remove("a2", "b2", "c3", "d1", "e5"));
         Assert.Equal(7, dict5.Count);
+        Assert.Equal(7, dict5.Enumerate().Count());
+        Assert.Equal(7, dict5.EnumerateValues().Count());
 
         var slice45 = dict5.Slice1("a3");
         slice45.Remove("b2", "c2", "d2", "e8");
         Assert.Equal(6, dict5.Count);
+        Assert.Equal(6, dict5.Enumerate().Count());
+        Assert.Equal(6, dict5.EnumerateValues().Count());
         Assert.Equal(2, slice45.Count);
         Assert.False(dict5.Contains("a3", "b2", "c2", "d2", "e8"));
         Assert.False(slice45.Contains("b2", "c2", "d2", "e8"));
 
         dict5.Add("a3", "b2", "c2", "d2", "e8", 8);
         Assert.Equal(7, dict5.Count);
+        Assert.Equal(7, dict5.Enumerate().Count());
+        Assert.Equal(7, dict5.EnumerateValues().Count());
         Assert.Equal(3, slice45.Count);
         Assert.True(dict5.Contains("a3", "b2", "c2", "d2", "e8"));
         Assert.True(slice45.Contains("b2", "c2", "d2", "e8"));
@@ -41,6 +49,8 @@ public class RemoveTests
         slice45 = dict5.Slice1("a1");
         slice45.Add("b1", "c1", "d1", "e1", 1);
         Assert.Equal(8, dict5.Count);
+        Assert.Equal(8, dict5.Enumerate().Count());
+        Assert.Equal(8, dict5.EnumerateValues().Count());
         Assert.Equal(3, slice45.Count);
         Assert.True(dict5.Contains("a1", "b1", "c1", "d1", "e1"));
         Assert.True(slice45.Contains("b1", "c1", "d1", "e1"));
@@ -58,20 +68,28 @@ public class RemoveTests
 
         Assert.True(dict4.Remove("a1", "b1", "c1", "d1"));
         Assert.Equal(8, dict4.Count);
+        Assert.Equal(8, dict4.Enumerate().Count());
+        Assert.Equal(8, dict4.EnumerateValues().Count());
         Assert.False(dict4.Contains("a1", "b1", "c1", "d1"));
         Assert.False(dict4.Remove("a1", "b1", "c1", "d1"));
         Assert.True(dict4.Remove("a2", "b2", "c3", "d1"));
         Assert.Equal(7, dict4.Count);
+        Assert.Equal(7, dict4.Enumerate().Count());
+        Assert.Equal(7, dict4.EnumerateValues().Count());
 
         var slice34 = dict4.Slice1("a3");
         slice34.Remove("b2", "c2", "d2");
         Assert.Equal(6, dict4.Count);
+        Assert.Equal(6, dict4.Enumerate().Count());
+        Assert.Equal(6, dict4.EnumerateValues().Count());
         Assert.Equal(2, slice34.Count);
         Assert.False(dict4.Contains("a3", "b2", "c2", "d2"));
         Assert.False(slice34.Contains("b2", "c2", "d2"));
 
         dict4.Add("a3", "b2", "c2", "d2", 8);
         Assert.Equal(7, dict4.Count);
+        Assert.Equal(7, dict4.Enumerate().Count());
+        Assert.Equal(7, dict4.EnumerateValues().Count());
         Assert.Equal(3, slice34.Count);
         Assert.True(dict4.Contains("a3", "b2", "c2", "d2"));
         Assert.True(slice34.Contains("b2", "c2", "d2"));
@@ -79,6 +97,8 @@ public class RemoveTests
         slice34 = dict4.Slice1("a1");
         slice34.Add("b1", "c1", "d1", 1);
         Assert.Equal(8, dict4.Count);
+        Assert.Equal(8, dict4.Enumerate().Count());
+        Assert.Equal(8, dict4.EnumerateValues().Count());
         Assert.Equal(3, slice34.Count);
         Assert.True(dict4.Contains("a1", "b1", "c1", "d1"));
         Assert.True(slice34.Contains("b1", "c1", "d1"));
@@ -96,20 +116,28 @@ public class RemoveTests
 
         Assert.True(dict3.Remove("a1", "b1", "c1"));
         Assert.Equal(8, dict3.Count);
+        Assert.Equal(8, dict3.Enumerate().Count());
+        Assert.Equal(8, dict3.EnumerateValues().Count());
         Assert.False(dict3.Contains("a1", "b1", "c1"));
         Assert.False(dict3.Remove("a1", "b1", "c1"));
         Assert.True(dict3.Remove("a2", "b2", "c3"));
         Assert.Equal(7, dict3.Count);
+        Assert.Equal(7, dict3.Enumerate().Count());
+        Assert.Equal(7, dict3.EnumerateValues().Count());
 
         var slice23 = dict3.Slice1("a3");
         slice23.Remove("b2", "c2");
         Assert.Equal(6, dict3.Count);
+        Assert.Equal(6, dict3.Enumerate().Count());
+        Assert.Equal(6, dict3.EnumerateValues().Count());
         Assert.Equal(2, slice23.Count);
         Assert.False(dict3.Contains("a3", "b2", "c2"));
         Assert.False(slice23.Contains("b2", "c2"));
 
         dict3.Add("a3", "b2", "c2", 8);
         Assert.Equal(7, dict3.Count);
+        Assert.Equal(7, dict3.Enumerate().Count());
+        Assert.Equal(7, dict3.EnumerateValues().Count());
         Assert.Equal(3, slice23.Count);
         Assert.True(dict3.Contains("a3", "b2", "c2"));
         Assert.True(slice23.Contains("b2", "c2"));
@@ -117,6 +145,8 @@ public class RemoveTests
         slice23 = dict3.Slice1("a1");
         slice23.Add("b1", "c1", 1);
         Assert.Equal(8, dict3.Count);
+        Assert.Equal(8, dict3.Enumerate().Count());
+        Assert.Equal(8, dict3.EnumerateValues().Count());
         Assert.Equal(3, slice23.Count);
         Assert.True(dict3.Contains("a1", "b1", "c1"));
         Assert.True(slice23.Contains("b1", "c1"));
@@ -134,20 +164,28 @@ public class RemoveTests
 
         Assert.True(dict2.Remove("a1", "b1"));
         Assert.Equal(8, dict2.Count);
+        Assert.Equal(8, dict2.Enumerate().Count());
+        Assert.Equal(8, dict2.EnumerateValues().Count());
         Assert.False(dict2.Contains("a1", "b1"));
         Assert.False(dict2.Remove("a1", "b1"));
         Assert.True(dict2.Remove("a2", "b2"));
         Assert.Equal(7, dict2.Count);
+        Assert.Equal(7, dict2.Enumerate().Count());
+        Assert.Equal(7, dict2.EnumerateValues().Count());
 
         var slice12 = dict2.Slice1("a3");
         slice12.Remove("b2");
         Assert.Equal(6, dict2.Count);
+        Assert.Equal(6, dict2.Enumerate().Count());
+        Assert.Equal(6, dict2.EnumerateValues().Count());
         Assert.Equal(2, slice12.Count);
         Assert.False(dict2.Contains("a3", "b2"));
         Assert.False(slice12.Contains("b2"));
 
         dict2.Add("a3", "b2", 8);
         Assert.Equal(7, dict2.Count);
+        Assert.Equal(7, dict2.Enumerate().Count());
+        Assert.Equal(7, dict2.EnumerateValues().Count());
         Assert.Equal(3, slice12.Count);
         Assert.True(dict2.Contains("a3", "b2"));
         Assert.True(slice12.Contains("b2"));
@@ -156,6 +194,8 @@ public class RemoveTests
         Assert.False(slice12.ContainsKey("b1"));
         slice12.Add("b1", 1);
         Assert.Equal(8, dict2.Count);
+        Assert.Equal(8, dict2.Enumerate().Count());
+        Assert.Equal(8, dict2.EnumerateValues().Count());
         Assert.Equal(3, slice12.Count);
         Assert.True(dict2.Contains("a1", "b1"));
         Assert.True(slice12.Contains("b1"));
@@ -167,13 +207,19 @@ public class RemoveTests
 
         Assert.True(dict1.Remove("a1"));
         Assert.Equal(2, dict1.Count);
+        Assert.Equal(2, dict1.Enumerate().Count());
+        Assert.Equal(2, dict1.EnumerateValues().Count());
         Assert.False(dict1.Contains("a1"));
         Assert.False(dict1.Remove("a1"));
         Assert.True(dict1.Remove("a2"));
         Assert.Equal(1, dict1.Count);
+        Assert.Equal(1, dict1.Enumerate().Count());
+        Assert.Equal(1, dict1.EnumerateValues().Count());
 
         dict1.Add("a2", 2);
         Assert.Equal(2, dict1.Count);
+        Assert.Equal(2, dict1.Enumerate().Count());
+        Assert.Equal(2, dict1.EnumerateValues().Count());
         Assert.True(dict1.Contains("a2"));
     }
 

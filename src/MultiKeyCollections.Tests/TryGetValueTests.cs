@@ -1,6 +1,6 @@
 using Xunit;
 
-namespace TableCollections.Tests
+namespace MultiKeyCollections.Tests
 {
     public class TryGetValueTests
     {

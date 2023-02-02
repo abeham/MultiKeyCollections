@@ -5,7 +5,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <Title>$(AssemblyName)</Title>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <Authors>Andreas Beham</Authors>
     <Company>HEAL, FH Upper Austria</Company>
     <Description>MultiKeyCollections adds MultiKeyDictionary classes which, as the name implies, are dictionaries that can be accessed by more than one key. These can be sliced to obtain representations with less keys. A slice is just a lower dimensional representation that fully supports manipulation. The actual values are kept in a single list, the keys map into this list via sets of indices.</Description>
@@ -14,9 +14,9 @@
     <RepositoryUrl>https://github.com/abeham/MultiKeyCollections</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>collections,dictionary,map</PackageTags>
-    <PackageReleaseNotes>1.0.0 is the initial release</PackageReleaseNotes>
-    <AssemblyVersion>1.0.0</AssemblyVersion>
-    <FileVersion>1.0.0</FileVersion>
+    <PackageReleaseNotes>1.1.0 changes namespace name and improves performance</PackageReleaseNotes>
+    <AssemblyVersion>1.1.0</AssemblyVersion>
+    <FileVersion>1.1.0</FileVersion>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
     <IncludeSymbols>True</IncludeSymbols>

@@ -1,6 +1,6 @@
 using System;
 
-namespace TableCollections
+namespace MultiKeyCollections
 {
     internal static class ExceptionHandling
     {
